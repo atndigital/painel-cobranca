@@ -202,7 +202,13 @@ def processar_arquivo(uploaded_file, safra: str):
     df['Status do número de acesso'] = df['Status do número de acesso'].str.strip()
 
     def get_port(num):
-        v = con.get('port',{}).get(_fmt_num(num))
+        na_ = _fmt_num(num)
+        # Tenta pelo NUMERO_LINHA (= numero de acesso)
+        v = con.get('port',{}).get(na_)
+        if not v or (isinstance(v,float) and pd.isna(v)):
+            # Tenta pelo TELEFONE_PORTADO
+            tel_ = _fmt_num(con.get('tel',{}).get(na_,''))
+            v = con.get('port',{}).get(tel_) if tel_ else None
         return v if v and not (isinstance(v,float) and pd.isna(v)) else 0
 
     df['PORTIN'] = df['Número de acesso'].apply(get_port)
@@ -231,14 +237,27 @@ def processar_arquivo(uploaded_file, safra: str):
         elif portin not in ('','0',0):             port_label = 'Nao Concluida'
         else:                                      port_label = ''
 
+        # Cruzar: NUMERO_LINHA do CONECTADAS = NUMERO DE ACESSO da safra
+        # Fallback: TELEFONE_PORTADO do CONECTADAS
+        nome_con   = con.get('nome',{}).get(na,'')
+        tel_port   = _fmt_num(con.get('tel',{}).get(na,''))
+        num_linha  = _fmt_num(con.get('linha',{}).get(na,''))
+        port_con   = con.get('port',{}).get(na,'')
+
+        # Se não encontrou pelo NUMERO_LINHA, tenta pelo TELEFONE_PORTADO
+        if not nome_con and tel_port:
+            nome_con  = con.get('nome',{}).get(tel_port,'')
+            num_linha = _fmt_num(con.get('linha',{}).get(tel_port,''))
+            port_con  = con.get('port',{}).get(tel_port,'')
+
         rows.append({
             'SAFRA':            safra,
             'CPF':              str(row.get('Cpf','') or ''),
-            'NOME':             con.get('nome',{}).get(na,''),
+            'NOME':             nome_con,
             'PROPOSTA':         str(row.get('Código externo','') or ''),
             'NUMERO DE ACESSO': na,
-            'NUMERO PORTADO':   _fmt_num(con.get('tel',{}).get(na,'')),
-            'NUMERO LINHA':     _fmt_num(con.get('linha',{}).get(na,'')),
+            'NUMERO PORTADO':   tel_port,
+            'NUMERO LINHA':     num_linha,
             'STATUS ACESSO':    status,
             'FATURA':           fat['num'],
             'STATUS 1ª FATURA': st1,
