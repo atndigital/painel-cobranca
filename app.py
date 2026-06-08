@@ -423,10 +423,28 @@ with tab2:
             st.markdown(f"### {safra}")
             c1,c2,c3,c4,c5,c6 = st.columns(6)
 
+            # Buscar cobertura do Supabase
+            _cob_data = None
+            try:
+                import os as _os2
+                from supabase import create_client as _cc2
+                _sb2 = _cc2(_os2.getenv('SUPABASE_URL',''), _os2.getenv('SUPABASE_KEY',''))
+                _r = _sb2.table('safras').select(
+                    '"LINHAS_CONECTADAS","FATURAS_ENCONTRADAS","COBERTURA_PCT"'
+                ).eq('"SAFRA"', safra).limit(1).execute()
+                if _r.data: _cob_data = _r.data[0]
+            except: pass
+
             with c1:
-                st.markdown(mc("Gross", f"{N:,}",
-                               sub=f"✅ Ativos: {NA:,} ({pct(NA,N)})  ❌ Canc: {NC:,} ({pct(NC,N)})",
-                               tipo='azul'), unsafe_allow_html=True)
+                sub_gross = f"✅ Ativos: {NA:,} ({pct(NA,N)})  ❌ Canc: {NC:,} ({pct(NC,N)})"
+                if _cob_data:
+                    lin = _cob_data.get('LINHAS_CONECTADAS') or 0
+                    fat = _cob_data.get('FATURAS_ENCONTRADAS') or 0
+                    cob = float(_cob_data.get('COBERTURA_PCT') or 0)
+                    cor_cob = 'verde' if cob >= 88 else 'amarelo' if cob >= 80 else 'verm'
+                    sub_gross += f"<br>📡 Cobertura: {cob:.1f}% ({fat:,}/{lin:,})"
+                st.markdown(mc("Gross", f"{N:,}", sub=sub_gross, tipo='azul'),
+                            unsafe_allow_html=True)
             with c2:
                 st.markdown(mc("% Estorno Atual",
                                f"{pct(ET,N)}",

@@ -209,8 +209,9 @@ def processar_arquivo(uploaded_file, safra: str):
     df['STATUS ESTORNO'] = df['1ª fatura - Data de vencimento'].apply(
         lambda v: _status_estorno(v, safra))
 
-    # Salvar safra no Supabase
-    _salvar_safra_supabase(df, safra)
+    # Salvar safra no Supabase com métricas de cobertura
+    linhas_con = len(_PORT_CACHE.get('port', {})) // 2 if _PORT_CACHE else 0
+    _salvar_safra_supabase(df, safra, linhas_conectadas=linhas_con)
 
     # Construir controle — somente ATIVOS com fatura aberta
     rows = []
@@ -256,12 +257,13 @@ def processar_arquivo(uploaded_file, safra: str):
     resumo   = calcular_resumo_base(df, safra)
     return df_ctrl, resumo
 
-def _salvar_safra_supabase(df: pd.DataFrame, safra: str):
-    """Salva/atualiza registros da safra no Supabase."""
+def _salvar_safra_supabase(df: pd.DataFrame, safra: str, linhas_conectadas: int = 0):
+    """Salva/atualiza registros da safra no Supabase com métricas de cobertura."""
     try:
         sb = _get_sb()
         if not sb: return
-        # Remover registros antigos desta safra e reinserir
+        faturas_encontradas = len(df)
+        cobertura = round(faturas_encontradas / linhas_conectadas * 100, 1) if linhas_conectadas else 0
         sb.table('safras').delete().eq('"SAFRA"', safra).execute()
         cols_map = {
             'Cpf': 'CPF',
@@ -279,6 +281,9 @@ def _salvar_safra_supabase(df: pd.DataFrame, safra: str):
         }
         df_save = df[[c for c in cols_map.keys() if c in df.columns]].rename(columns=cols_map).copy()
         df_save['SAFRA'] = safra
+        df_save['LINHAS_CONECTADAS']  = linhas_conectadas
+        df_save['FATURAS_ENCONTRADAS'] = faturas_encontradas
+        df_save['COBERTURA_PCT']       = cobertura
         # Converter datas
         for col in ['DATA DA ATIVACAO','VENCIMENTO 1 FATURA','VENCIMENTO 2 FATURA']:
             if col in df_save.columns:
@@ -286,7 +291,7 @@ def _salvar_safra_supabase(df: pd.DataFrame, safra: str):
         records = df_save.where(pd.notnull(df_save), None).to_dict('records')
         for i in range(0, len(records), 500):
             sb.table('safras').insert(records[i:i+500]).execute()
-        print(f"[SAFRAS] ✓ {safra}: {len(records)} registros salvos")
+        print(f"[SAFRAS] ✓ {safra}: {len(records)} registros | cobertura: {cobertura}%")
     except Exception as e:
         print(f"[SAFRAS] Erro ao salvar: {e}")
 
