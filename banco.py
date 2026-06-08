@@ -99,31 +99,51 @@ def atualizar_banco(df_ctrl_atual: pd.DataFrame,
                     df_novo: pd.DataFrame,
                     safra: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 
-    HIST_COLS = ['ENVIO','ULTIMO ENVIO','STATUS PAGAMENTO']
+    HIST_COLS = ['ENVIO', 'ULTIMO ENVIO', 'STATUS PAGAMENTO']
+    KEY_COLS  = ['NUMERO DE ACESSO', 'FATURA']
+    COLS_OBRIGATORIAS = KEY_COLS + HIST_COLS + ['SAFRA']
 
-    for c in HIST_COLS:
-        if c not in df_novo.columns: df_novo[c] = None
+    # Garantir colunas no df_novo
+    for c in COLS_OBRIGATORIAS:
+        if c not in df_novo.columns:
+            df_novo[c] = None
 
+    # Sem histórico anterior — primeira carga
     if df_ctrl_atual is None or len(df_ctrl_atual) == 0:
+        salvar_controle(df_novo)
+        return df_novo.copy(), pd.DataFrame()
+
+    # Detectar controle corrompido (colunas faltando) — resetar automaticamente
+    cols_faltando = [c for c in COLS_OBRIGATORIAS if c not in df_ctrl_atual.columns]
+    if cols_faltando:
+        print(f"[banco] Controle corrompido — colunas faltando: {cols_faltando}. Resetando.")
         salvar_controle(df_novo)
         return df_novo.copy(), pd.DataFrame()
 
     df_outras = df_ctrl_atual[df_ctrl_atual['SAFRA'] != safra].copy()
     df_safra  = df_ctrl_atual[df_ctrl_atual['SAFRA'] == safra].copy()
 
-    for c in HIST_COLS:
-        if c not in df_safra.columns: df_safra[c] = None
+    # Safra ainda não existia no controle — primeira vez que sobe essa safra
+    if len(df_safra) == 0:
+        df_final = pd.concat([df_outras, df_novo], ignore_index=True)
+        salvar_controle(df_final)
+        return df_final, pd.DataFrame()
 
-    ctrl_idx = set(zip(df_safra['NUMERO DE ACESSO'].astype(str),
-                       df_safra['FATURA'].astype(str)))
-    novo_idx  = set(zip(df_novo['NUMERO DE ACESSO'].astype(str),
-                        df_novo['FATURA'].astype(str)))
+    # Garantir colunas no controle existente
+    for c in KEY_COLS + HIST_COLS:
+        if c not in df_safra.columns:
+            df_safra[c] = None
 
-    # Quem pagou
+    ctrl_idx = set(zip(df_safra['NUMERO DE ACESSO'].fillna('').astype(str),
+                       df_safra['FATURA'].fillna('').astype(str)))
+    novo_idx  = set(zip(df_novo['NUMERO DE ACESSO'].fillna('').astype(str),
+                        df_novo['FATURA'].fillna('').astype(str)))
+
+    # Quem pagou (estava no ctrl, sumiu do novo)
     pagaram_keys = ctrl_idx - novo_idx
     df_pagaram = df_safra[
         df_safra.apply(
-            lambda r: (str(r['NUMERO DE ACESSO']), str(r['FATURA'])) in pagaram_keys,
+            lambda r: (str(r.get('NUMERO DE ACESSO','')), str(r.get('FATURA',''))) in pagaram_keys,
             axis=1)].copy()
 
     df_hist_new = pd.DataFrame()
@@ -137,21 +157,24 @@ def atualizar_banco(df_ctrl_atual: pd.DataFrame,
         df_hist_new['DIAS ATÉ PAGAMENTO'] = df_hist_new['VENCIMENTO'].apply(
             lambda v: (hoje - v).days if isinstance(v, date) else None)
 
-    # Preservar histórico de envios
-    df_preservado = df_safra[
+    # Preservar histórico de envios para quem continua em aberto
+    cols_preservar = [c for c in KEY_COLS + HIST_COLS if c in df_safra.columns]
+    df_preservado  = df_safra[
         df_safra.apply(
-            lambda r: (str(r['NUMERO DE ACESSO']), str(r['FATURA'])) in novo_idx,
-            axis=1)][['NUMERO DE ACESSO','FATURA'] + HIST_COLS].copy()
+            lambda r: (str(r.get('NUMERO DE ACESSO','')), str(r.get('FATURA',''))) in novo_idx,
+            axis=1)][cols_preservar].copy()
 
-    df_merged = df_novo.merge(
-        df_preservado.rename(columns={c: c+'_OLD' for c in HIST_COLS}),
-        on=['NUMERO DE ACESSO','FATURA'], how='left')
-
-    for col in HIST_COLS:
-        old_col = col + '_OLD'
-        if old_col in df_merged.columns:
-            df_merged[col] = df_merged[old_col].combine_first(df_merged[col])
-            df_merged.drop(columns=[old_col], inplace=True)
+    if len(df_preservado) > 0:
+        df_merged = df_novo.merge(
+            df_preservado.rename(columns={c: c+'_OLD' for c in HIST_COLS if c in df_preservado.columns}),
+            on=KEY_COLS, how='left')
+        for col in HIST_COLS:
+            old_col = col + '_OLD'
+            if old_col in df_merged.columns:
+                df_merged[col] = df_merged[old_col].combine_first(df_merged[col])
+                df_merged.drop(columns=[old_col], inplace=True)
+    else:
+        df_merged = df_novo.copy()
 
     df_final = pd.concat([df_outras, df_merged], ignore_index=True)
 
