@@ -138,23 +138,15 @@ with st.sidebar:
     st.markdown("### 🔗 Base CONECTADAS")
     if conectadas_carregado():
         data_up = get_data_upload_conectadas()
-        info = f'✅ CONECTADAS carregado<br><small style="opacity:.7">Upload: {data_up}</small>' if data_up else '✅ CONECTADAS carregado'
+        info = f'✅ CONECTADAS carregado<br><small style="opacity:.7">Atualizado: {data_up}</small>' if data_up else '✅ CONECTADAS carregado'
         st.markdown(f'<div class="ok-box">{info}</div>', unsafe_allow_html=True)
     else:
-        st.markdown('<div class="warn-box">⚠️ Carregar CONECTADAS</div>', unsafe_allow_html=True)
-
-    con_up = st.file_uploader("CONECTADAS (.xlsx/.xls)", type=['xlsx','xls'],
-                               key='con_up', label_visibility='collapsed')
-    if con_up:
-        with st.spinner("Carregando CONECTADAS..."):
-            file_bytes = con_up.read()
-            st.caption(f"Arquivo: {con_up.name} | {len(file_bytes):,} bytes")
-            ok = carregar_conectadas_de_bytes(file_bytes, con_up.name)
-            if ok:
-                st.markdown('<div class="ok-box">✅ Carregado!</div>', unsafe_allow_html=True)
-                st.rerun()
-            else:
-                st.error("Erro ao carregar — verifique o log (Manage app)")
+        st.markdown('<div class="warn-box">⚠️ CONECTADAS não encontrado no Supabase</div>', unsafe_allow_html=True)
+        st.markdown("<small style='color:#5C6480'>Importe o CSV diretamente no Supabase → tabela <b>conectadas</b></small>",
+                    unsafe_allow_html=True)
+        if st.button("🔄 Tentar carregar do Supabase", use_container_width=True):
+            garantir_conectadas()
+            st.rerun()
 
     st.markdown("---")
 
