@@ -1,11 +1,3 @@
-import os
-import os as _os
-import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
-from datetime import date, datetime
-import io
-
 from processamento import (processar_arquivo, calcular_resumo,
                             carregar_conectadas_de_bytes, conectadas_carregado,
                             get_data_upload_conectadas, garantir_conectadas)
