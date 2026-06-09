@@ -61,6 +61,10 @@ def carregar_controle() -> pd.DataFrame:
             offset += 1000
         df = pd.DataFrame(todos)
         if len(df) > 0 and 'id' in df.columns: df = df.drop(columns=['id'])
+        # Normalizar colunas de data — manter como string para evitar ArrowTypeError
+        for col in ['ENVIO','ULTIMO ENVIO','VENCIMENTO']:
+            if col in df.columns:
+                df[col] = df[col].apply(lambda v: str(v)[:10] if pd.notna(v) and v else None)
         return df
     except Exception as e:
         print(f"[Supabase] carregar_controle: {e}")
@@ -179,8 +183,8 @@ def registrar_envios_historico(df_enviados: pd.DataFrame, etapa: str, data_envio
             # Verificar se já existe linha para este CPF+SAFRA
             res = sb.table('historico_envios')\
                     .select('id')\
-                    .eq('"CPF"', cpf)\
-                    .eq('"SAFRA"', safra)\
+                    .eq('CPF', cpf)\
+                    .eq('SAFRA', safra)\
                     .execute()
 
             record = {
@@ -197,7 +201,7 @@ def registrar_envios_historico(df_enviados: pd.DataFrame, etapa: str, data_envio
                 # Atualizar linha existente — só a coluna da etapa
                 sb.table('historico_envios')\
                   .update({f'"{col_etapa}"': data_str})\
-                  .eq('"CPF"', cpf).eq('"SAFRA"', safra).execute()
+                  .eq('CPF', cpf).eq('SAFRA', safra).execute()
             else:
                 # Inserir nova linha
                 sb.table('historico_envios').insert({

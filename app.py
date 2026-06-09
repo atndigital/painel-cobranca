@@ -469,13 +469,13 @@ with tab2:
             with c6:
                 # Evolução do estorno ao longo das atualizações
                 if snap_safra is not None and len(snap_safra) >= 2:
-                    pct_ini = float(snap_safra.iloc[0]['PCT_ESTORNO'])
+                    pct_ant = float(snap_safra.iloc[-2]['PCT_ESTORNO'])
                     pct_atu = float(snap_safra.iloc[-1]['PCT_ESTORNO'])
-                    delta   = pct_ini - pct_atu
+                    delta   = pct_ant - pct_atu
                     tipo_ev = 'verde' if delta > 0 else 'verm'
-                    st.markdown(mc("Evolução Total",
+                    st.markdown(mc("Evolução",
                                    f"{delta:+.1f}pp",
-                                   sub=f"{pct_ini:.1f}% → {pct_atu:.1f}%",
+                                   sub=f"{pct_ant:.1f}% → {pct_atu:.1f}%",
                                    tipo=tipo_ev),
                                 unsafe_allow_html=True)
                 else:
@@ -731,9 +731,9 @@ with tab4:
                                               'clientes': records},
                                         timeout=30)
                                 if resp.status_code in (200, 201):
-                                    # Atualizar ULTIMO ENVIO no controle
+                                    # Atualizar ULTIMO ENVIO no controle — string para evitar ArrowTypeError
                                     mask = st.session_state.df_ctrl['ETAPA'] == etapa
-                                    st.session_state.df_ctrl.loc[mask, 'ULTIMO ENVIO'] = hoje
+                                    st.session_state.df_ctrl.loc[mask, 'ULTIMO ENVIO'] = str(hoje)
                                     salvar_controle(st.session_state.df_ctrl)
                                     # Registrar no histórico de envios
                                     registrar_envios_historico(df_et, etapa, hoje)

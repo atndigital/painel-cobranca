@@ -284,7 +284,7 @@ def _salvar_safra_supabase(df: pd.DataFrame, safra: str, linhas_conectadas: int 
         cobertura   = round(faturas_enc / linhas_conectadas * 100, 1) if linhas_conectadas else 0
 
         # Substituir registros da safra
-        sb.table('safras').delete().eq('"SAFRA"', safra).execute()
+        sb.table('safras').delete().eq('SAFRA', safra).execute()
 
         cols_map = {
             'Cpf': 'CPF',
