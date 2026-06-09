@@ -120,7 +120,7 @@ def exportar_wpp(df):
 # ── Session state ─────────────────────────────────────────────────────────────
 if 'df_ctrl' not in st.session_state: st.session_state.df_ctrl = carregar_controle()
 if 'df_hist' not in st.session_state: st.session_state.df_hist = carregar_historico()
-if 'resumos' not in st.session_state: st.session_state.resumos = {}
+if 'resumos' not in st.session_state: st.session_state.resumos = carregar_resumos()
 if 'snaps'        not in st.session_state: st.session_state.snaps        = carregar_snapshots()
 if 'hist_envios'  not in st.session_state: st.session_state.hist_envios  = carregar_historico_envios()
 
@@ -169,6 +169,7 @@ with st.sidebar:
                 st.session_state.df_hist = pd.concat(
                     [st.session_state.df_hist, df_hist_new], ignore_index=True)
                 st.session_state.resumos[safra_sel] = res_novo
+                salvar_resumo(safra_sel, res_novo)
 
                 # Salvar snapshot de estorno
                 pagamentos_total = len(st.session_state.df_hist[
@@ -206,6 +207,25 @@ with st.sidebar:
         filtro_safra=[]; filtro_etapa=[]; filtro_port='Todas'; venc_ini=None; venc_fim=None
 
     st.markdown("---")
+    if st.button("🔧 Testar Supabase", use_container_width=True):
+        from banco import _get_sb
+        sb = _get_sb()
+        if not sb:
+            st.error("❌ Cliente não criado — verifique SUPABASE_URL e SUPABASE_KEY nos Secrets")
+        else:
+            try:
+                res = sb.table('snapshots_estorno').insert({
+                    'DATA': '2099-01-01', 'SAFRA': '__TESTE__',
+                    'GROSS': 1, 'ESTORNO': 0, 'PAGAMENTOS': 0, 'PCT_ESTORNO': 0.0
+                }).execute()
+                if res.data:
+                    sb.table('snapshots_estorno').delete().eq('SAFRA', '__TESTE__').execute()
+                    st.success("✅ Supabase OK! Insert/Delete funcionando.")
+                else:
+                    st.error(f"Insert retornou vazio: {res}")
+            except Exception as e:
+                st.error(f"Erro Supabase: {e}")
+
     if st.button("🗑️ Limpar dados", use_container_width=True):
         from pathlib import Path
         for f in Path(__file__).parent.glob('data/*.parquet'): f.unlink()
@@ -380,6 +400,10 @@ with tab2:
 
         for safra in safras:
             res = st.session_state.resumos.get(safra)
+            if res is None or not res.get('rows'):
+                # Recalcular do controle atual
+                from processamento import calcular_resumo
+                res = calcular_resumo(df_s)
             df_s = df[df['SAFRA'] == safra]
 
             # Calcular métricas do controle
