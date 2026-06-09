@@ -12,7 +12,8 @@ from processamento import (processar_arquivo, calcular_resumo,
 from banco import (carregar_controle, salvar_controle, carregar_historico,
                    atualizar_banco, registrar_envio, registrar_bloqueio,
                    carregar_snapshots, salvar_snapshot,
-                   carregar_historico_envios, registrar_envios_historico)
+                   carregar_historico_envios, registrar_envios_historico,
+                   salvar_resumo, carregar_resumos)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ENDPOINT WEBHOOK — recebe bloqueio do n8n quando cliente clica em BLOQUEAR
