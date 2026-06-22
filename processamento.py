@@ -306,55 +306,55 @@ def processar_arquivo(uploaded_file, safra: str):
         val2  = _parse_val(row.get('2ª fatura - Preço da fatura'))
         today = date.today()
 
-        fats_cobrar = []
-
+        # ── Definir fatura a cobrar ────────────────────────────────────────
+        # Regra: só cobra fatura dentro do período de estorno
+        # STATUS ESTORNO '1 FATURA' → apenas 1ª fatura
+        # STATUS ESTORNO '2 FATURAS' → fatura mais urgente (menor vencimento aberta)
+        # Em ambos os casos: 1 linha por cliente nas etapas normais
+        fat = None
         if status_est == '1 FATURA':
-            # Só 1ª fatura importa
             if st1 == 'Aberta' and venc1:
-                fats_cobrar.append({'num':1,'valor':val1,'vencimento':venc1,'dias':(today-venc1).days})
-
+                fat = {'num':1,'valor':val1,'vencimento':venc1,'dias':(today-venc1).days}
         elif status_est == '2 FATURAS':
             f1_aberta = st1 == 'Aberta' and venc1
             f2_aberta = st2 == 'Aberta' and venc2
-
-            if f1_aberta and f2_aberta and port_label == 'Concluida':
-                # Port. Concluída com 2 abertas → 2 linhas
-                fats_cobrar.append({'num':1,'valor':val1,'vencimento':venc1,'dias':(today-venc1).days})
-                fats_cobrar.append({'num':2,'valor':val2,'vencimento':venc2,'dias':(today-venc2).days})
-            elif f1_aberta and f2_aberta:
-                # Sem port. concluída → só a mais urgente
+            if f1_aberta and f2_aberta:
+                # Pega a mais urgente (menor vencimento)
                 if venc1 <= venc2:
-                    fats_cobrar.append({'num':1,'valor':val1,'vencimento':venc1,'dias':(today-venc1).days})
+                    fat = {'num':1,'valor':val1,'vencimento':venc1,'dias':(today-venc1).days}
                 else:
-                    fats_cobrar.append({'num':2,'valor':val2,'vencimento':venc2,'dias':(today-venc2).days})
+                    fat = {'num':2,'valor':val2,'vencimento':venc2,'dias':(today-venc2).days}
             elif f1_aberta:
-                fats_cobrar.append({'num':1,'valor':val1,'vencimento':venc1,'dias':(today-venc1).days})
+                fat = {'num':1,'valor':val1,'vencimento':venc1,'dias':(today-venc1).days}
             elif f2_aberta:
-                fats_cobrar.append({'num':2,'valor':val2,'vencimento':venc2,'dias':(today-venc2).days})
+                fat = {'num':2,'valor':val2,'vencimento':venc2,'dias':(today-venc2).days}
 
-        for fat in fats_cobrar:
-            et = calcular_etapa(fat['dias'], portin)
-            rows.append({
-                'SAFRA':            safra,
-                'CPF':              str(row.get('Cpf','') or ''),
-                'NOME':             nome_con,
-                'PROPOSTA':         str(row.get('Código externo','') or ''),
-                'NUMERO DE ACESSO': na,
-                'NUMERO PORTADO':   tel_port,
-                'NUMERO LINHA':     num_linha,
-                'STATUS ACESSO':    status,
-                'FATURA':           fat['num'],
-                'STATUS 1ª FATURA': st1,
-                'STATUS 2ª FATURA': st2,
-                'VALOR':            fat['valor'],
-                'VENCIMENTO':       fat['vencimento'],
-                'DIAS ATRASO':      fat['dias'],
-                'PORTABILIDADE':    port_label,
-                'ETAPA':            et,
-                'ENVIO':            None,
-                'ULTIMO ENVIO':     None,
-                'STATUS PAGAMENTO': st1 if fat['num'] == 1 else st2,
-            })
+        if not fat: continue
+
+        et = calcular_etapa(fat['dias'], portin)
+
+        rows.append({
+            'SAFRA':            safra,
+            'CPF':              str(row.get('Cpf','') or ''),
+            'NOME':             nome_con,
+            'PROPOSTA':         str(row.get('Código externo','') or ''),
+            'NUMERO DE ACESSO': na,
+            'NUMERO PORTADO':   tel_port,
+            'NUMERO LINHA':     num_linha,
+            'STATUS ACESSO':    status,
+            'FATURA':           fat['num'],
+            'STATUS 1ª FATURA': st1,
+            'STATUS 2ª FATURA': st2,
+            'VALOR':            fat['valor'],
+            'VENCIMENTO':       fat['vencimento'],
+            'DIAS ATRASO':      fat['dias'],
+            'PORTABILIDADE':    port_label,
+            'ETAPA':            et,
+            'STATUS ESTORNO':   status_est,
+            'ENVIO':            None,
+            'ULTIMO ENVIO':     None,
+            'STATUS PAGAMENTO': st1 if fat['num'] == 1 else st2,
+        })
     df_ctrl = pd.DataFrame(rows)
     resumo  = calcular_resumo_base(df, safra)
 
