@@ -551,7 +551,7 @@ with tab2:
                     SIM = {'1 FATURA ABERTA','2 FATURAS (2 ABERTA)',
                            '2 FATURAS (1 PAGA 2 ABERTA)','2 FATURAS ( 1 ABERTO 2 PAGA'}
 
-                    total_rows = [('Cancelados', NC, False)]
+                    total_rows = [('Cancelados', NC, True)]  # Cancelados são estorno
                     for label, t, pc_v, sp in _rows_det:
                         if t == 0: continue
                         total_rows.append((label, t, label in SIM))
