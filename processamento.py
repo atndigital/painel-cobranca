@@ -115,15 +115,20 @@ def _status_estorno(venc_1a, safra):
     if venc_1a is None or (isinstance(venc_1a, float) and pd.isna(venc_1a)):
         return 'SEM ESTORNO'
     try:
-        # Aceita datetime, date, Timestamp ou string
+        # Aceita datetime, date, Timestamp ou string dd/mm/yyyy
         if isinstance(venc_1a, (datetime, date, pd.Timestamp)):
-            p = pd.Period(venc_1a.strftime('%Y-%m'), 'M')
+            ts = pd.Timestamp(venc_1a)
+            if pd.isna(ts): return 'SEM ESTORNO'
+            p = pd.Period(ts.strftime('%Y-%m'), 'M')
         else:
-            p = pd.Period(str(venc_1a)[:7], 'M')  # pega só YYYY-MM
-
+            s = str(venc_1a).strip()
+            # formato dd/mm/yyyy → converter para yyyy-mm
+            if '/' in s and len(s) >= 8:
+                parts = s.split('/')
+                s = f"{parts[2][:4]}-{parts[1].zfill(2)}"
+            p = pd.Period(s[:7], 'M')
         if p.year < 2026:
             return 'SEM ESTORNO'
-
         fech = pd.Period(FECHAMENTO_SAFRA.get(safra.upper(), '2026-06'), 'M')
         if p <= fech - 2:  return '2 FATURAS'
         if p == fech - 1:  return '1 FATURA'
@@ -203,11 +208,7 @@ def processar_arquivo(uploaded_file, safra: str):
         df['1ª fatura - Data de vencimento'], dayfirst=True, errors='coerce')
     df['2ª fatura - Data de vencimento'] = pd.to_datetime(
         df['2ª fatura - Data de vencimento'], dayfirst=True, errors='coerce')
-    # Debug: verificar quantos vencimentos foram parseados
-    n_venc = df['1ª fatura - Data de vencimento'].notna().sum()
-    print(f'[DEBUG] Vencimentos 1ª fatura parseados: {n_venc}/{len(df)}')
-    if n_venc > 0:
-        print(f'[DEBUG] Amostra: {df["1ª fatura - Data de vencimento"].dropna().iloc[0]}')
+    print(f"[DEBUG] Vencimentos parseados: {df['1ª fatura - Data de vencimento'].notna().sum()}/{len(df)} | ex: {df['1ª fatura - Data de vencimento'].dropna().iloc[0] if df['1ª fatura - Data de vencimento'].notna().any() else 'nenhum'}")
 
     # ── FILTRO 2: venc 1ª >= mês de ativação ─────────────────────────────────
     mask = (df['1ª fatura - Data de vencimento'].notna() &
