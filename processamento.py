@@ -306,34 +306,43 @@ def _salvar_safra_supabase(df: pd.DataFrame, safra: str, linhas_conectadas: int 
         df_save['FATURAS_ENCONTRADAS'] = faturas_enc
         df_save['COBERTURA_PCT']       = cobertura
 
-        # Converter datas para string
         for col in ['DATA DA ATIVACAO','VENCIMENTO 1 FATURA','VENCIMENTO 2 FATURA']:
             if col in df_save.columns:
                 df_save[col] = pd.to_datetime(df_save[col], errors='coerce').dt.strftime('%Y-%m-%d')
 
-        # Limpar usando json round-trip — elimina NaN/NaT/Timestamp de forma definitiva
-        import json, math as _math, numpy as _np
-        def _safe(v):
+        # Limpar NaN/inf antes de serializar para JSON
+        import math as _math
+        def _cv(v):
             if v is None: return None
-            if isinstance(v, _np.generic): v = v.item()  # numpy → python nativo
             if isinstance(v, float) and (_math.isnan(v) or _math.isinf(v)): return None
-            if str(v) in ("nan","NaT","None","<NA>","NaN"): return None
+            if str(v) in ("nan","NaT","None","<NA>"): return None
             return v
-
-        records = [{k: _safe(v) for k,v in r.items()} for r in df_save.to_dict("records")]
-
-        # Verificar se JSON é válido antes de enviar
-        try:
-            json.dumps(records[:1])
-        except Exception as e_json:
-            print(f"[SAFRAS] JSON inválido: {e_json}")
-            return
-
+        import math as _math
+        def _cv_local(v):
+            if v is None: return None
+            if isinstance(v, float) and (_math.isnan(v) or _math.isinf(v)): return None
+            from datetime import date as _date
+            if isinstance(v, _date): return v.strftime("%Y-%m-%d")
+            s = str(v)
+            if s in ("nan","NaT","None","<NA>",""): return None
+            return v
+        records = []
+        for r in df_save.to_dict("records"):
+            records.append({k: _cv_local(v) for k,v in r.items()})
         for i in range(0, len(records), 500):
             try:
                 sb.table("safras").insert(records[i:i+500]).execute()
             except Exception as e_insert:
                 print(f"[SAFRAS] Erro insert lote {i}: {e_insert}")
+                # Tentar inserir um por um para identificar o registro problemático
+                for j, rec in enumerate(records[i:i+500]):
+                    try:
+                        sb.table("safras").insert(rec).execute()
+                    except Exception as e_row:
+                        bad_keys = [k for k,v in rec.items() if v is not None and not isinstance(v, (str,int,float,bool,type(None)))]
+                        print(f"[SAFRAS] Erro row {i+j}: {e_row} | tipos ruins: {bad_keys}")
+                        break
+                raise e_insert
         print(f"[SAFRAS] ✓ {safra}: {faturas_enc} registros | cobertura {cobertura}%")
     except Exception as e:
         print(f"[SAFRAS] Erro: {e}")
