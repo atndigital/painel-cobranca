@@ -271,13 +271,12 @@ def processar_arquivo(uploaded_file, safra: str):
     # ── Construir controle — somente ATIVOS com fatura aberta ─────────────────
     rows = []
     for _, row in df.iterrows():
-        status     = str(row.get('Status do número de acesso') or '').strip()
+        status = str(row.get('Status do número de acesso') or '').strip()
         if status != 'Ativo': continue
+
         portin     = str(row.get('PORTIN') or '')
         status_est = str(row.get('STATUS ESTORNO') or '').strip()
-
-        fats = _faturas_abertas(row, status_estorno=status_est, portin=portin)
-        if not fats: continue
+        if status_est == 'SEM ESTORNO': continue
 
         na        = _fmt_num(row.get('Número de acesso',''))
         st1       = str(row.get('1ª fatura - Status da fatura') or '').strip()
@@ -285,14 +284,56 @@ def processar_arquivo(uploaded_file, safra: str):
         nome_con  = con.get('nome',{}).get(na,'')
         tel_port  = _fmt_num(con.get('tel',{}).get(na,''))
         num_linha = _fmt_num(con.get('linha',{}).get(na,''))
+        port_label = ('Concluida' if portin == 'Portabilidade Concluida'
+                      else 'Nao Concluida' if portin not in ('','0',0) else '')
 
-        if portin == 'Portabilidade Concluida':  port_label = 'Concluida'
-        elif portin not in ('','0',0):            port_label = 'Nao Concluida'
-        else:                                     port_label = ''
+        def _parse_venc(vr):
+            try:
+                if isinstance(vr, str):            return datetime.strptime(vr,'%d/%m/%Y').date()
+                elif isinstance(vr, datetime):     return vr.date()
+                elif isinstance(vr, date):         return vr
+                elif isinstance(vr, pd.Timestamp): return vr.date()
+            except: pass
+            return None
 
-        for fat in fats:
-            # SEM ESTORNO → sem etapa
-            et = calcular_etapa(fat['dias'], portin) if status_est != 'SEM ESTORNO' else None
+        def _parse_val(v):
+            try: return float(str(v or '').replace('R$','').replace(',','.').strip())
+            except: return None
+
+        venc1 = _parse_venc(row.get('1ª fatura - Data de vencimento'))
+        venc2 = _parse_venc(row.get('2ª fatura - Data de vencimento'))
+        val1  = _parse_val(row.get('1ª fatura - Preço da fatura'))
+        val2  = _parse_val(row.get('2ª fatura - Preço da fatura'))
+        today = date.today()
+
+        fats_cobrar = []
+
+        if status_est == '1 FATURA':
+            # Só 1ª fatura importa
+            if st1 == 'Aberta' and venc1:
+                fats_cobrar.append({'num':1,'valor':val1,'vencimento':venc1,'dias':(today-venc1).days})
+
+        elif status_est == '2 FATURAS':
+            f1_aberta = st1 == 'Aberta' and venc1
+            f2_aberta = st2 == 'Aberta' and venc2
+
+            if f1_aberta and f2_aberta and port_label == 'Concluida':
+                # Port. Concluída com 2 abertas → 2 linhas
+                fats_cobrar.append({'num':1,'valor':val1,'vencimento':venc1,'dias':(today-venc1).days})
+                fats_cobrar.append({'num':2,'valor':val2,'vencimento':venc2,'dias':(today-venc2).days})
+            elif f1_aberta and f2_aberta:
+                # Sem port. concluída → só a mais urgente
+                if venc1 <= venc2:
+                    fats_cobrar.append({'num':1,'valor':val1,'vencimento':venc1,'dias':(today-venc1).days})
+                else:
+                    fats_cobrar.append({'num':2,'valor':val2,'vencimento':venc2,'dias':(today-venc2).days})
+            elif f1_aberta:
+                fats_cobrar.append({'num':1,'valor':val1,'vencimento':venc1,'dias':(today-venc1).days})
+            elif f2_aberta:
+                fats_cobrar.append({'num':2,'valor':val2,'vencimento':venc2,'dias':(today-venc2).days})
+
+        for fat in fats_cobrar:
+            et = calcular_etapa(fat['dias'], portin)
             rows.append({
                 'SAFRA':            safra,
                 'CPF':              str(row.get('Cpf','') or ''),
@@ -314,7 +355,6 @@ def processar_arquivo(uploaded_file, safra: str):
                 'ULTIMO ENVIO':     None,
                 'STATUS PAGAMENTO': st1 if fat['num'] == 1 else st2,
             })
-
     df_ctrl = pd.DataFrame(rows)
     resumo  = calcular_resumo_base(df, safra)
 
