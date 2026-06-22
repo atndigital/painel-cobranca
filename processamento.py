@@ -261,6 +261,11 @@ def processar_arquivo(uploaded_file, safra: str):
         return v if v and not (isinstance(v, float) and pd.isna(v)) else 0
 
     df['PORTIN'] = df['Número de acesso'].apply(get_port)
+    _n_port    = (df['PORTIN'] == 'Portabilidade Concluida').sum()
+    _n_nao     = (df['PORTIN'] == 'Portabilidade nao Concluida').sum()
+    _n_null    = df['PORTIN'].isna().sum()
+    _cache_sz  = len(con.get('port', {}))
+    print(f"[PORTIN] Cache: {_cache_sz} entradas | Concluida: {_n_port} | Nao Concluida: {_n_nao} | Sem match: {_n_null}")
 
     # STATUS ESTORNO — sempre calculado pelo painel
     df['STATUS ESTORNO'] = df['1ª fatura - Data de vencimento'].apply(
