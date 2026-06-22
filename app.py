@@ -1175,13 +1175,13 @@ with tab7:
     st.markdown("<small style='color:#3B4163'>Clientes que clicaram em Boleto, Pix ou Bloquear nas mensagens enviadas</small>",
                 unsafe_allow_html=True)
 
-    # Carregar tabela interacoes_whatsapp do Supabase
+    # Carregar tabela respostas_clientes do Supabase
     _df_int = pd.DataFrame()
     try:
         import os as _os_int
         from supabase import create_client as _cc_int
         _sb_int = _cc_int(_os_int.getenv('SUPABASE_URL',''), _os_int.getenv('SUPABASE_KEY',''))
-        _res_int = _sb_int.table('interacoes_whatsapp').select('*').order('created_at', desc=True).execute()
+        _res_int = _sb_int.table('respostas_clientes').select('*').order('created_at', desc=True).execute()
         if _res_int.data:
             _df_int = pd.DataFrame(_res_int.data)
     except Exception as _e_int:
@@ -1195,9 +1195,9 @@ with tab7:
         </div>""", unsafe_allow_html=True)
     else:
         # Métricas gerais
-        n_boleto  = int((_df_int.get('acao','') == 'boleto').sum())  if 'acao' in _df_int.columns else 0
-        n_pix     = int((_df_int.get('acao','') == 'pix').sum())     if 'acao' in _df_int.columns else 0
-        n_bloq    = int((_df_int.get('acao','') == 'bloquear').sum()) if 'acao' in _df_int.columns else 0
+        n_boleto  = int((_df_int.get('acao','').str.upper() == 'BOLETO').sum())  if 'acao' in _df_int.columns else 0
+        n_pix     = int((_df_int.get('acao','').str.upper().isin(['CODIGO_PIX','PIX'])).sum())     if 'acao' in _df_int.columns else 0
+        n_bloq    = int((_df_int.get('acao','').str.upper() == 'BLOQUEAR').sum()) if 'acao' in _df_int.columns else 0
         total_int = len(_df_int)
 
         i1,i2,i3,i4 = st.columns(4)
@@ -1251,18 +1251,22 @@ with tab7:
         st.markdown('---')
 
         # Tabela
-        cols_show_int = [c for c in ['telefone','nome','acao','etapa','safra','created_at'] if c in df_int_f.columns]
+        cols_show_int = [c for c in ['created_at','safra','etapa','acao','telefone','nome','numero_acesso','fatura','valor','vencimento'] if c in df_int_f.columns]
         df_int_show = df_int_f[cols_show_int].copy().fillna('').replace('None','')
         if 'created_at' in df_int_show.columns:
             df_int_show['created_at'] = pd.to_datetime(df_int_show['created_at'], errors='coerce').dt.strftime('%d/%m/%Y %H:%M')
         st.dataframe(df_int_show, use_container_width=True, height=420, hide_index=True,
                      column_config={
-                         'telefone':   st.column_config.TextColumn('Telefone'),
-                         'nome':       st.column_config.TextColumn('Nome'),
-                         'acao':       st.column_config.TextColumn('Ação'),
-                         'etapa':      st.column_config.TextColumn('Etapa'),
-                         'safra':      st.column_config.TextColumn('Safra'),
-                         'created_at': st.column_config.TextColumn('Data/Hora'),
+                         'created_at':    st.column_config.TextColumn('Data/Hora'),
+                         'safra':         st.column_config.TextColumn('Safra'),
+                         'etapa':         st.column_config.TextColumn('Etapa'),
+                         'acao':          st.column_config.TextColumn('Ação'),
+                         'telefone':      st.column_config.TextColumn('Telefone'),
+                         'nome':          st.column_config.TextColumn('Nome'),
+                         'numero_acesso': st.column_config.TextColumn('Nº Acesso'),
+                         'fatura':        st.column_config.NumberColumn('Fatura'),
+                         'valor':         st.column_config.NumberColumn('Valor', format='R$ %.2f'),
+                         'vencimento':    st.column_config.TextColumn('Vencimento'),
                      })
 
         # Export
