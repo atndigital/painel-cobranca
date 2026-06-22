@@ -165,6 +165,11 @@ with st.sidebar:
         with st.spinner("Processando..."):
             try:
                 garantir_conectadas()  # garante cache antes de processar
+                # ── DEBUG CONECTADAS ─────────────────────────────────────
+                from processamento import _PORT_CACHE as _pc
+                _cache_sz = len(_pc.get('port', {}))
+                st.info(f"🔍 Debug CONECTADAS: {_cache_sz} entradas no cache | Carregado: {conectadas_carregado()}")
+                # ─────────────────────────────────────────────────────────
                 df_novo, res_novo = processar_arquivo(uploaded, safra_sel)
                 df_upd, df_hist_new = atualizar_banco(
                     st.session_state.df_ctrl, df_novo, safra_sel)
