@@ -513,13 +513,16 @@ with tab2:
                 st.plotly_chart(fig_ev, use_container_width=True, config={'displayModeBar':False})
 
             # Detalhamento das categorias
-            if res and res.get('rows'):
-                with st.expander("Ver detalhamento de faturas"):
+            _rows_det = res.get('rows') if res else []
+            with st.expander("Ver detalhamento de faturas"):
+                if not _rows_det:
+                    st.info("Reprocesse o arquivo da safra para ver o detalhamento atualizado.")
+                else:
                         SIM = {'1 FATURA ABERTA','2 FATURAS (2 ABERTA)',
                                '2 FATURAS (1 PAGA 2 ABERTA)','2 FATURAS ( 1 ABERTO 2 PAGA'}
 
                         # Cancelados como primeira linha
-                        total_rows = [('Cancelados', NC, False)]
+                        total_rows = [('Cancelados', NC, False)]  # NC definido acima no loop
                         for label, t, pc_v, sp in res['rows']:
                             if t == 0: continue
                             total_rows.append((label, t, label in SIM))
