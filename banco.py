@@ -64,13 +64,22 @@ def _insert_lotes(sb, tabela, records, lote=500):
     return total
 
 def _normalizar_ctrl(df):
-    """Normaliza colunas de data do controle para string."""
+    """Normaliza colunas do controle — datas como string, FATURA como numeric."""
     df = df.copy()
     for col in ['ENVIO', 'ULTIMO ENVIO', 'VENCIMENTO']:
         if col in df.columns:
             df[col] = df[col].apply(
                 lambda v: str(v)[:10] if v is not None and str(v) not in ('None','nan','NaT','') else None
             )
+    # FATURA deve ser numérica — string vazia vira NaN
+    if 'FATURA' in df.columns:
+        df['FATURA'] = pd.to_numeric(df['FATURA'], errors='coerce')
+    # DIAS ATRASO também numérico
+    if 'DIAS ATRASO' in df.columns:
+        df['DIAS ATRASO'] = pd.to_numeric(df['DIAS ATRASO'], errors='coerce')
+    # VALOR numérico
+    if 'VALOR' in df.columns:
+        df['VALOR'] = pd.to_numeric(df['VALOR'], errors='coerce')
     return df
 
 # ── CONTROLE ──────────────────────────────────────────────────────────────────
