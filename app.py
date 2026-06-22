@@ -76,7 +76,8 @@ ETAPA_ORDER = ['Preventivo','Etapa 1','Etapa 2','Etapa 3','Etapa 4',
                'Etapa 5','Etapa 6','Etapa 7','Etapa 8']
 ETAPA_COR   = {'Preventivo':'#4ADE80','Etapa 1':'#FBBF24','Etapa 2':'#FBBF24',
                'Etapa 3':'#F87171','Etapa 4':'#F87171','Etapa 5':'#A78BFA',
-               'Etapa 6':'#A78BFA','Etapa 7':'#94A3B8','Etapa 8':'#94A3B8'}
+               'Etapa 6':'#A78BFA','Etapa 7':'#94A3B8','Etapa 8':'#94A3B8',
+               'Urgente':'#FF6B35'}
 
 def mc(label, value, sub='', tipo='', trend=''):
     trend_html = f'<div class="tr">{trend}</div>' if trend else ''
@@ -234,10 +235,11 @@ st.markdown(f"<small style='color:#3B4163'>Safras: {' · '.join(safras_at) or 'N
             unsafe_allow_html=True)
 st.markdown("---")
 
-tab1,tab2,tab3,tab4,tab5,tab6 = st.tabs([
+tab1,tab2,tab3,tab4,tab5,tab6,tab7 = st.tabs([
     "🎯  Controle de Envio","📈  Resumo & Funil",
     "💰  Histórico de Pagamentos","📲  Envios do Dia",
-    "📋  Histórico de Envios","⚙️  Tabela de Fluxo"])
+    "📋  Histórico de Envios","⚙️  Tabela de Fluxo",
+    "📊  Interações WhatsApp"])
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # TAB 1 — CONTROLE DE ENVIO
@@ -642,6 +644,7 @@ with tab4:
         'Etapa 6':    os.getenv('HSM_ETAPA6',     'hsm_etapa6'),
         'Etapa 7':    os.getenv('HSM_ETAPA7',     'hsm_etapa7'),
         'Etapa 8':    os.getenv('HSM_ETAPA8',     'hsm_etapa8'),
+        'Urgente':    os.getenv('HSM_URGENTE',    'hsm_urgente'),
     }
 
     st.markdown("### 📲 Envios do Dia")
@@ -822,6 +825,110 @@ with tab4:
                                mime='text/csv', key=f'dl_{etapa}')
             st.markdown('<hr style="margin:.6rem 0;opacity:.15">', unsafe_allow_html=True)
 
+        # ── Etapa Urgente — Port. Concluída em estorno ──────────────────────────
+        st.markdown('---')
+        st.markdown('<div class="sec">🚨 Urgente — Portabilidade Concluída em estorno</div>', unsafe_allow_html=True)
+
+        SIM_ESTORNO = {'Etapa 1','Etapa 2','Etapa 3','Etapa 4',
+                       'Etapa 5','Etapa 6','Etapa 7','Etapa 8','Preventivo'}
+        if df is not None and len(df) > 0:
+            df_urg = df[
+                (df['PORTABILIDADE'] == 'Concluida') &
+                (df['ETAPA'].isin(SIM_ESTORNO)) &
+                (df.get('STATUS PAGAMENTO', pd.Series(dtype=str)).ne('BLOQUEADO'))
+            ].copy() if 'ETAPA' in df.columns else pd.DataFrame()
+        else:
+            df_urg = pd.DataFrame()
+
+        if len(df_urg) == 0:
+            st.markdown("<small style='color:#3B4163'>Nenhum cliente elegível para envio urgente.</small>", unsafe_allow_html=True)
+        else:
+            col_uh, col_ub = st.columns([3,1])
+            with col_uh:
+                st.markdown(
+                    f"<div style='display:flex;align-items:center;gap:10px;margin:.8rem 0 .4rem'>"
+                    f"<div style='width:10px;height:10px;border-radius:50%;background:#FF6B35'></div>"
+                    f"<span style='font-weight:600;color:#E8EAF0'>Urgente</span>"
+                    f"<span style='color:#3B4163;font-size:.82rem'>{len(df_urg):,} clientes · Port. Concluída em estorno</span>"
+                    f"</div>", unsafe_allow_html=True)
+            with col_ub:
+                if st.button('🚨 Disparar Urgente', key='btn_urgente', use_container_width=True):
+                    st.session_state['confirmar_Urgente'] = True
+
+            if st.session_state.get('confirmar_Urgente'):
+                st.warning(f'⚠️ Confirmar envio urgente de **{len(df_urg):,} clientes** (Port. Concluída em estorno)?')
+                col_sim, col_nao = st.columns(2)
+                with col_sim:
+                    if st.button('✅ Confirmar', key='sim_urgente', use_container_width=True):
+                        if not WEBHOOK_URL:
+                            st.error('Configure a URL do webhook n8n.')
+                        else:
+                            records = []
+                            for _, r in df_urg.iterrows():
+                                tel_p = str(r.get('NUMERO PORTADO','') or '').strip()
+                                venc  = r.get('VENCIMENTO')
+                                try: venc_fmt = pd.to_datetime(venc, errors='coerce').strftime('%d/%m/%Y')
+                                except: venc_fmt = ''
+                                records.append({
+                                    'CPF': str(r.get('CPF','') or ''),
+                                    'SAFRA': str(r.get('SAFRA','') or ''),
+                                    'ETAPA': 'Urgente',
+                                    'HSM': HSM_MAP.get('Urgente',''),
+                                    'PORTABILIDADE': 'Concluida',
+                                    'FATURA': int(r.get('FATURA',1) or 1),
+                                    'DIAS_ATRASO': int(r.get('DIAS ATRASO',0) or 0),
+                                    'TELEFONE_PORTADO': tel_p,
+                                    'NUMERO_LINHA': str(r.get('NUMERO LINHA','') or ''),
+                                    'hsm_numero': tel_p,
+                                    'hsm_nome': str(r.get('NOME','') or ''),
+                                    'hsm_valor': fmt_brl(r.get('VALOR')),
+                                    'hsm_vencimento': venc_fmt,
+                                })
+                            try:
+                                with st.spinner(f'Enviando {len(records):,} mensagens urgentes...'):
+                                    resp = _req.post(WEBHOOK_URL,
+                                        json={'etapa':'Urgente','hsm':HSM_MAP.get('Urgente',''),
+                                              'total':len(records),'data':str(hoje),
+                                              'clientes':records},
+                                        timeout=30)
+                                if resp.status_code in (200,201):
+                                    mask_urg = st.session_state.df_ctrl['PORTABILIDADE'] == 'Concluida'
+                                    st.session_state.df_ctrl.loc[mask_urg, 'ULTIMO ENVIO'] = str(hoje)
+                                    salvar_controle(st.session_state.df_ctrl)
+                                    registrar_envios_historico(df_urg, 'Urgente', hoje)
+                                    st.session_state.hist_envios = carregar_historico_envios()
+                                    st.session_state.pop('confirmar_Urgente', None)
+                                    st.success(f'✅ {len(records):,} mensagens urgentes enviadas!')
+                                    st.rerun()
+                                else:
+                                    st.error(f'Erro webhook: {resp.status_code}')
+                            except Exception as e:
+                                st.error(f'Erro: {e}')
+                with col_nao:
+                    if st.button('❌ Cancelar', key='nao_urgente', use_container_width=True):
+                        st.session_state.pop('confirmar_Urgente', None)
+                        st.rerun()
+
+            cols_urg = ['SAFRA','NOME','NUMERO PORTADO','NUMERO LINHA','ETAPA',
+                        'VALOR','VENCIMENTO','DIAS ATRASO']
+            df_urg_show = df_urg[[c for c in cols_urg if c in df_urg.columns]].copy()
+            if 'VALOR' in df_urg_show.columns:
+                df_urg_show['VALOR'] = pd.to_numeric(df_urg_show['VALOR'], errors='coerce')
+            if 'VENCIMENTO' in df_urg_show.columns:
+                df_urg_show['VENCIMENTO'] = pd.to_datetime(df_urg_show['VENCIMENTO'], errors='coerce').dt.strftime('%d/%m/%Y')
+            df_urg_show = df_urg_show.replace({None:'','None':''})
+            st.dataframe(df_urg_show, use_container_width=True,
+                         height=min(250, 38+len(df_urg_show)*35), hide_index=True,
+                         column_config={
+                             'VALOR': st.column_config.NumberColumn('Valor', format='R$ %.2f'),
+                             'DIAS ATRASO': st.column_config.NumberColumn('Dias'),
+                         })
+            csv_urg = exportar_wpp(df_urg)
+            st.download_button('⬇️ Baixar lista Urgente',
+                               data=csv_urg.encode('utf-8-sig'),
+                               file_name=f'urgente_{hoje}.csv',
+                               mime='text/csv', key='dl_urgente')
+
         # ── Painel de bloqueados ──────────────────────────────────────────────
         st.markdown('---')
         st.markdown('<div class="sec">Clientes que solicitaram bloqueio</div>', unsafe_allow_html=True)
@@ -933,3 +1040,114 @@ with tab6:
 - Cancelados/Bloqueados: apenas no resumo de estorno
 - A cada atualização, um **snapshot** é salvo para rastrear a evolução % semana a semana
     """)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# TAB 7 — INTERAÇÕES WHATSAPP (Boleto / Pix / Bloquear)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+with tab7:
+    st.markdown("### 📊 Interações dos Clientes no WhatsApp")
+    st.markdown("<small style='color:#3B4163'>Clientes que clicaram em Boleto, Pix ou Bloquear nas mensagens enviadas</small>",
+                unsafe_allow_html=True)
+
+    # Carregar tabela interacoes_whatsapp do Supabase
+    _df_int = pd.DataFrame()
+    try:
+        import os as _os_int
+        from supabase import create_client as _cc_int
+        _sb_int = _cc_int(_os_int.getenv('SUPABASE_URL',''), _os_int.getenv('SUPABASE_KEY',''))
+        _res_int = _sb_int.table('interacoes_whatsapp').select('*').order('created_at', desc=True).execute()
+        if _res_int.data:
+            _df_int = pd.DataFrame(_res_int.data)
+    except Exception as _e_int:
+        st.warning(f"Erro ao carregar interações: {_e_int}")
+
+    if len(_df_int) == 0:
+        st.markdown("""<div style='text-align:center;padding:4rem;color:#3B4163'>
+            <div style='font-size:3rem'>📲</div>
+            <div style='font-size:1.1rem;color:#5C6480;margin-top:1rem'>Nenhuma interação registrada ainda</div>
+            <div style='font-size:.85rem;margin-top:.5rem'>Aparecem aqui quando clientes clicam em Boleto, Pix ou Bloquear</div>
+        </div>""", unsafe_allow_html=True)
+    else:
+        # Métricas gerais
+        n_boleto  = int((_df_int.get('acao','') == 'boleto').sum())  if 'acao' in _df_int.columns else 0
+        n_pix     = int((_df_int.get('acao','') == 'pix').sum())     if 'acao' in _df_int.columns else 0
+        n_bloq    = int((_df_int.get('acao','') == 'bloquear').sum()) if 'acao' in _df_int.columns else 0
+        total_int = len(_df_int)
+
+        i1,i2,i3,i4 = st.columns(4)
+        with i1: st.markdown(mc('Total interações', f'{total_int:,}', tipo='azul'), unsafe_allow_html=True)
+        with i2: st.markdown(mc('Boleto', f'{n_boleto:,}', sub=pct(n_boleto,total_int), tipo='verde'), unsafe_allow_html=True)
+        with i3: st.markdown(mc('Pix', f'{n_pix:,}', sub=pct(n_pix,total_int), tipo='amar'), unsafe_allow_html=True)
+        with i4: st.markdown(mc('Bloquear', f'{n_bloq:,}', sub=pct(n_bloq,total_int), tipo='verm'), unsafe_allow_html=True)
+
+        st.markdown('---')
+
+        # Filtros
+        col_fi1, col_fi2, col_fi3 = st.columns(3)
+        with col_fi1:
+            acoes_disp = ['Todas'] + sorted(_df_int['acao'].dropna().unique().tolist()) if 'acao' in _df_int.columns else ['Todas']
+            filtro_acao = st.selectbox('Ação', acoes_disp, key='int_acao')
+        with col_fi2:
+            safras_int = ['Todas'] + sorted(_df_int['safra'].dropna().unique().tolist()) if 'safra' in _df_int.columns else ['Todas']
+            filtro_int_safra = st.selectbox('Safra', safras_int, key='int_safra')
+        with col_fi3:
+            etapas_int = ['Todas'] + sorted(_df_int['etapa'].dropna().unique().tolist()) if 'etapa' in _df_int.columns else ['Todas']
+            filtro_int_etapa = st.selectbox('Etapa', etapas_int, key='int_etapa')
+
+        df_int_f = _df_int.copy()
+        if filtro_acao != 'Todas' and 'acao' in df_int_f.columns:
+            df_int_f = df_int_f[df_int_f['acao'] == filtro_acao]
+        if filtro_int_safra != 'Todas' and 'safra' in df_int_f.columns:
+            df_int_f = df_int_f[df_int_f['safra'] == filtro_int_safra]
+        if filtro_int_etapa != 'Todas' and 'etapa' in df_int_f.columns:
+            df_int_f = df_int_f[df_int_f['etapa'] == filtro_int_etapa]
+
+        st.markdown(f'<div class="sec">{len(df_int_f):,} interações filtradas</div>', unsafe_allow_html=True)
+
+        # Gráfico por ação
+        if 'acao' in df_int_f.columns:
+            vc_acao = df_int_f['acao'].value_counts().reset_index()
+            vc_acao.columns = ['acao','qtd']
+            cores_acao = {'boleto':'#4ADE80','pix':'#FBBF24','bloquear':'#F87171'}
+            
+            fig_int = go.Figure(go.Bar(
+                x=vc_acao['acao'], y=vc_acao['qtd'],
+                marker_color=[cores_acao.get(a,'#60A5FA') for a in vc_acao['acao']],
+                hovertemplate='%{x}<br>%{y} clientes<extra></extra>'
+            ))
+            fig_int.update_layout(paper_bgcolor='#0F1117',plot_bgcolor='#161B27',
+                                  font=dict(family='DM Sans',color='#5C6480'),
+                                  margin=dict(l=10,r=10,t=10,b=10),height=200,
+                                  xaxis=dict(gridcolor='#1E2535'),
+                                  yaxis=dict(gridcolor='#1E2535'),showlegend=False)
+            st.plotly_chart(fig_int, use_container_width=True, config={'displayModeBar':False})
+
+        st.markdown('---')
+
+        # Tabela
+        cols_show_int = [c for c in ['telefone','nome','acao','etapa','safra','created_at'] if c in df_int_f.columns]
+        df_int_show = df_int_f[cols_show_int].copy().fillna('').replace('None','')
+        if 'created_at' in df_int_show.columns:
+            df_int_show['created_at'] = pd.to_datetime(df_int_show['created_at'], errors='coerce').dt.strftime('%d/%m/%Y %H:%M')
+        st.dataframe(df_int_show, use_container_width=True, height=420, hide_index=True,
+                     column_config={
+                         'telefone':   st.column_config.TextColumn('Telefone'),
+                         'nome':       st.column_config.TextColumn('Nome'),
+                         'acao':       st.column_config.TextColumn('Ação'),
+                         'etapa':      st.column_config.TextColumn('Etapa'),
+                         'safra':      st.column_config.TextColumn('Safra'),
+                         'created_at': st.column_config.TextColumn('Data/Hora'),
+                     })
+
+        # Export
+        buf_int = io.BytesIO()
+        df_int_show.to_excel(buf_int, index=False, engine='openpyxl')
+        st.download_button('⬇️ Exportar XLSX',
+                           data=buf_int.getvalue(),
+                           file_name=f'interacoes_wpp_{date.today().strftime("%Y%m%d")}.xlsx',
+                           mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+        # Botão recarregar
+        if st.button('🔄 Atualizar interações', use_container_width=False):
+            st.rerun()
