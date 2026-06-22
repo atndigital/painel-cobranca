@@ -155,34 +155,58 @@ def calcular_etapa(dias, portin):
     return None
 
 # ── Fatura mais urgente aberta ────────────────────────────────────────────────
-def _fatura_urgente(row, status_estorno=None):
+def _parse_venc(vr):
+    """Converte vencimento para date independente do tipo."""
+    try:
+        if isinstance(vr, str):            return datetime.strptime(vr,'%d/%m/%Y').date()
+        elif isinstance(vr, datetime):     return vr.date()
+        elif isinstance(vr, date):         return vr
+        elif isinstance(vr, pd.Timestamp): return vr.date()
+    except: pass
+    return None
+
+def _faturas_abertas(row, status_estorno=None, portin=None):
     """
-    Retorna a fatura mais urgente aberta.
-    - STATUS ESTORNO '1 FATURA': considera apenas a 1ª fatura (2ª ignorada)
-    - STATUS ESTORNO '2 FATURAS': considera ambas, pega a de menor vencimento
+    Retorna lista de faturas abertas a cobrar.
+    - SEM ESTORNO          → []
+    - 1 FATURA             → só 1ª fatura se aberta → [fat1]
+    - 2 FATURAS + Port.Conc→ ambas abertas → [fat1, fat2]
+    - 2 FATURAS + não Port → só a mais urgente → [fat_urgente]
+    - 2 FATURAS (1 paga)   → só a aberta → [fat_aberta]
     """
     today = date.today()
-    cands = []
-    faturas = ['1ª'] if status_estorno == '1 FATURA' else ['1ª', '2ª']
-    for n in faturas:
-        st = str(row.get(f'{n} fatura - Status da fatura') or '').strip()
+    if status_estorno == 'SEM ESTORNO':
+        return []
+
+    faturas_check = ['1ª'] if status_estorno == '1 FATURA' else ['1ª', '2ª']
+    abertas = []
+    for n in faturas_check:
+        st  = str(row.get(f'{n} fatura - Status da fatura') or '').strip()
         if st != 'Aberta': continue
-        vr = row.get(f'{n} fatura - Data de vencimento')
-        try:
-            if isinstance(vr, str):             venc = datetime.strptime(vr,'%d/%m/%Y').date()
-            elif isinstance(vr, datetime):      venc = vr.date()
-            elif isinstance(vr, date):          venc = vr
-            elif isinstance(vr, pd.Timestamp):  venc = vr.date()
-            else:                               continue
-        except: continue
+        vr  = row.get(f'{n} fatura - Data de vencimento')
+        venc = _parse_venc(vr)
+        if not venc: continue
         val_raw = str(row.get(f'{n} fatura - Preço da fatura') or '')                      .replace('R$','').replace(',','.').strip()
         try:    val = float(val_raw)
         except: val = None
-        cands.append((venc, 1 if n=='1ª' else 2, val))
-    if not cands: return None
-    cands.sort()
-    venc, num, val = cands[0]
-    return {'num':num, 'valor':val, 'vencimento':venc, 'dias':(today-venc).days}
+        abertas.append({'num': 1 if n=='1ª' else 2,
+                        'valor': val, 'vencimento': venc,
+                        'dias': (today - venc).days})
+
+    if not abertas:
+        return []
+
+    # 2 FATURAS abertas + Portabilidade Concluída → retorna as duas
+    if status_estorno == '2 FATURAS' and len(abertas) == 2 and portin == 'Portabilidade Concluida':
+        return sorted(abertas, key=lambda x: x['vencimento'])
+
+    # Demais casos → retorna só a mais urgente (menor vencimento)
+    return [sorted(abertas, key=lambda x: x['vencimento'])[0]]
+
+# Manter compatibilidade com chamadas antigas
+def _fatura_urgente(row, status_estorno=None):
+    fats = _faturas_abertas(row, status_estorno=status_estorno)
+    return fats[0] if fats else None
 
 # ── Processar arquivo de safra ────────────────────────────────────────────────
 def processar_arquivo(uploaded_file, safra: str):
@@ -247,18 +271,17 @@ def processar_arquivo(uploaded_file, safra: str):
     # ── Construir controle — somente ATIVOS com fatura aberta ─────────────────
     rows = []
     for _, row in df.iterrows():
-        status = str(row.get('Status do número de acesso') or '').strip()
-        fat = _fatura_urgente(row, status_estorno=str(row.get('STATUS ESTORNO') or '').strip()) if status == 'Ativo' else None
-        if not fat: continue
-
-        portin = str(row.get('PORTIN') or '')
+        status     = str(row.get('Status do número de acesso') or '').strip()
+        if status != 'Ativo': continue
+        portin     = str(row.get('PORTIN') or '')
         status_est = str(row.get('STATUS ESTORNO') or '').strip()
-        # SEM ESTORNO → sem etapa (ex: vencimento em junho para safra de março)
-        et = calcular_etapa(fat['dias'], portin) if status_est != 'SEM ESTORNO' else None
-        na  = _fmt_num(row.get('Número de acesso',''))
-        st1 = str(row.get('1ª fatura - Status da fatura') or '').strip()
-        st2 = str(row.get('2ª fatura - Status da fatura') or '').strip()
 
+        fats = _faturas_abertas(row, status_estorno=status_est, portin=portin)
+        if not fats: continue
+
+        na        = _fmt_num(row.get('Número de acesso',''))
+        st1       = str(row.get('1ª fatura - Status da fatura') or '').strip()
+        st2       = str(row.get('2ª fatura - Status da fatura') or '').strip()
         nome_con  = con.get('nome',{}).get(na,'')
         tel_port  = _fmt_num(con.get('tel',{}).get(na,''))
         num_linha = _fmt_num(con.get('linha',{}).get(na,''))
@@ -267,27 +290,30 @@ def processar_arquivo(uploaded_file, safra: str):
         elif portin not in ('','0',0):            port_label = 'Nao Concluida'
         else:                                     port_label = ''
 
-        rows.append({
-            'SAFRA':            safra,
-            'CPF':              str(row.get('Cpf','') or ''),
-            'NOME':             nome_con,
-            'PROPOSTA':         str(row.get('Código externo','') or ''),
-            'NUMERO DE ACESSO': na,
-            'NUMERO PORTADO':   tel_port,
-            'NUMERO LINHA':     num_linha,
-            'STATUS ACESSO':    status,
-            'FATURA':           fat['num'],
-            'STATUS 1ª FATURA': st1,
-            'STATUS 2ª FATURA': st2,
-            'VALOR':            fat['valor'],
-            'VENCIMENTO':       fat['vencimento'],
-            'DIAS ATRASO':      fat['dias'],
-            'PORTABILIDADE':    port_label,
-            'ETAPA':            et,
-            'ENVIO':            None,
-            'ULTIMO ENVIO':     None,
-            'STATUS PAGAMENTO': st1 if fat['num'] == 1 else st2,
-        })
+        for fat in fats:
+            # SEM ESTORNO → sem etapa
+            et = calcular_etapa(fat['dias'], portin) if status_est != 'SEM ESTORNO' else None
+            rows.append({
+                'SAFRA':            safra,
+                'CPF':              str(row.get('Cpf','') or ''),
+                'NOME':             nome_con,
+                'PROPOSTA':         str(row.get('Código externo','') or ''),
+                'NUMERO DE ACESSO': na,
+                'NUMERO PORTADO':   tel_port,
+                'NUMERO LINHA':     num_linha,
+                'STATUS ACESSO':    status,
+                'FATURA':           fat['num'],
+                'STATUS 1ª FATURA': st1,
+                'STATUS 2ª FATURA': st2,
+                'VALOR':            fat['valor'],
+                'VENCIMENTO':       fat['vencimento'],
+                'DIAS ATRASO':      fat['dias'],
+                'PORTABILIDADE':    port_label,
+                'ETAPA':            et,
+                'ENVIO':            None,
+                'ULTIMO ENVIO':     None,
+                'STATUS PAGAMENTO': st1 if fat['num'] == 1 else st2,
+            })
 
     df_ctrl = pd.DataFrame(rows)
     resumo  = calcular_resumo_base(df, safra)
