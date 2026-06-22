@@ -155,21 +155,27 @@ def calcular_etapa(dias, portin):
     return None
 
 # ── Fatura mais urgente aberta ────────────────────────────────────────────────
-def _fatura_urgente(row):
+def _fatura_urgente(row, status_estorno=None):
+    """
+    Retorna a fatura mais urgente aberta.
+    - STATUS ESTORNO '1 FATURA': considera apenas a 1ª fatura (2ª ignorada)
+    - STATUS ESTORNO '2 FATURAS': considera ambas, pega a de menor vencimento
+    """
     today = date.today()
     cands = []
-    for n in ['1ª','2ª']:
+    faturas = ['1ª'] if status_estorno == '1 FATURA' else ['1ª', '2ª']
+    for n in faturas:
         st = str(row.get(f'{n} fatura - Status da fatura') or '').strip()
         if st != 'Aberta': continue
         vr = row.get(f'{n} fatura - Data de vencimento')
         try:
-            if isinstance(vr, str):        venc = datetime.strptime(vr,'%d/%m/%Y').date()
-            elif isinstance(vr, datetime): venc = vr.date()
-            elif isinstance(vr, date):     venc = vr
-            else:                          continue
+            if isinstance(vr, str):             venc = datetime.strptime(vr,'%d/%m/%Y').date()
+            elif isinstance(vr, datetime):      venc = vr.date()
+            elif isinstance(vr, date):          venc = vr
+            elif isinstance(vr, pd.Timestamp):  venc = vr.date()
+            else:                               continue
         except: continue
-        val_raw = str(row.get(f'{n} fatura - Preço da fatura') or '')\
-                      .replace('R$','').replace(',','.').strip()
+        val_raw = str(row.get(f'{n} fatura - Preço da fatura') or '')                      .replace('R$','').replace(',','.').strip()
         try:    val = float(val_raw)
         except: val = None
         cands.append((venc, 1 if n=='1ª' else 2, val))
