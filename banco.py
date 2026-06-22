@@ -274,7 +274,6 @@ def salvar_resumo(safra: str, resumo: dict):
     sb = _get_sb()
     if not sb: return
     try:
-        # Converter valores não serializáveis
         def _fix(v):
             if isinstance(v, (int, float, str, bool, type(None))): return v
             return str(v)
@@ -286,9 +285,10 @@ def salvar_resumo(safra: str, resumo: dict):
             'DATA': date.today().strftime('%Y-%m-%d'),
             'RESUMO_JSON': json.dumps(resumo_clean)
         }
-        # Upsert por SAFRA
-        sb.table('resumos_safra').upsert(record, on_conflict='SAFRA').execute()
-        print(f"[Supabase] ✓ resumo salvo: {safra}")
+        # Delete + insert para garantir sobrescrita (upsert depende de constraint unique)
+        sb.table('resumos_safra').delete().eq('SAFRA', safra).execute()
+        sb.table('resumos_safra').insert(record).execute()
+        print(f"[Supabase] ✓ resumo salvo: {safra} (ET={resumo.get('ET',0)})")
     except Exception as e:
         print(f"[Supabase] salvar_resumo: {e}")
 
