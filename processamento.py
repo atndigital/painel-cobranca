@@ -152,6 +152,8 @@ def calcular_etapa(dias, portin):
         if 43 <= dias <= 50: return 'Etapa 6'
         if 51 <= dias <= 62: return 'Etapa 7'
         if 63 <= dias <= 70: return 'Etapa 8'
+    # 31+ dias sem Port. Concluída → Cobrança Final Sem Portin
+    if dias >= 31:           return 'Cobrança Final Sem Portin'
     return None
 
 # ── Fatura mais urgente aberta ────────────────────────────────────────────────
