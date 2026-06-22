@@ -829,14 +829,16 @@ with tab4:
         st.markdown('---')
         st.markdown('<div class="sec">🚨 Urgente — Portabilidade Concluída em estorno</div>', unsafe_allow_html=True)
 
-        SIM_ESTORNO = {'Etapa 1','Etapa 2','Etapa 3','Etapa 4',
-                       'Etapa 5','Etapa 6','Etapa 7','Etapa 8','Preventivo'}
-        if df is not None and len(df) > 0:
-            df_urg = df[
+        # Urgente: somente 1 fatura aberta + Port. Concluída
+        if df is not None and len(df) > 0 and 'ETAPA' in df.columns:
+            _mask_urg = (
                 (df['PORTABILIDADE'] == 'Concluida') &
-                (df['ETAPA'].isin(SIM_ESTORNO)) &
+                (df['ETAPA'].notna()) &
+                (df.get('STATUS ESTORNO', pd.Series(dtype=str)) == '1 FATURA') &
+                (df['STATUS 1ª FATURA'] == 'Aberta') &
                 (df.get('STATUS PAGAMENTO', pd.Series(dtype=str)).ne('BLOQUEADO'))
-            ].copy() if 'ETAPA' in df.columns else pd.DataFrame()
+            )
+            df_urg = df[_mask_urg].copy()
         else:
             df_urg = pd.DataFrame()
 
