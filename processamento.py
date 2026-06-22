@@ -242,7 +242,7 @@ def processar_arquivo(uploaded_file, safra: str):
     rows = []
     for _, row in df.iterrows():
         status = str(row.get('Status do número de acesso') or '').strip()
-        fat = _fatura_urgente(row) if status == 'Ativo' else None
+        fat = _fatura_urgente(row, status_estorno=str(row.get('STATUS ESTORNO') or '').strip()) if status == 'Ativo' else None
         if not fat: continue
 
         portin = str(row.get('PORTIN') or '')
