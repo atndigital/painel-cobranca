@@ -246,7 +246,9 @@ def processar_arquivo(uploaded_file, safra: str):
         if not fat: continue
 
         portin = str(row.get('PORTIN') or '')
-        et  = calcular_etapa(fat['dias'], portin)
+        status_est = str(row.get('STATUS ESTORNO') or '').strip()
+        # SEM ESTORNO → sem etapa (ex: vencimento em junho para safra de março)
+        et = calcular_etapa(fat['dias'], portin) if status_est != 'SEM ESTORNO' else None
         na  = _fmt_num(row.get('Número de acesso',''))
         st1 = str(row.get('1ª fatura - Status da fatura') or '').strip()
         st2 = str(row.get('2ª fatura - Status da fatura') or '').strip()
