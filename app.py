@@ -187,8 +187,15 @@ with st.sidebar:
                 st.session_state.snaps = snaps
 
                 pagaram = len(df_hist_new)
-                st.markdown(f'<div class="ok-box">✅ {len(df_novo):,} registros<br>'
-                             f'💰 {pagaram:,} pagamento(s)</div>', unsafe_allow_html=True)
+                et_salvo = int(res_novo.get('ET', 0))
+                n_salvo  = int(res_novo.get('N', 0))
+                pct_et   = f"{et_salvo/n_salvo:.1%}" if n_salvo else "—"
+                st.markdown(
+                    f'<div class="ok-box">'
+                    f'✅ {len(df_novo):,} registros processados<br>'
+                    f'💰 {pagaram:,} pagamento(s) detectado(s)<br>'
+                    f'📊 Estorno salvo: {et_salvo:,} clientes ({pct_et})'
+                    f'</div>', unsafe_allow_html=True)
             except Exception as e:
                 st.error(f"Erro: {e}")
 
