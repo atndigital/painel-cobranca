@@ -217,6 +217,26 @@ with st.sidebar:
         filtro_safra=[]; filtro_etapa=[]; filtro_port='Todas'; venc_ini=None; venc_fim=None
 
     st.markdown("---")
+
+    # Resetar resumo de safra específica (útil após mudança de lógica)
+    if df is not None and len(df) > 0:
+        st.markdown("### 🔁 Resetar Resumo")
+        safra_reset = st.selectbox("Safra para resetar", 
+            [''] + sorted(df['SAFRA'].dropna().unique().tolist()),
+            key='safra_reset')
+        if safra_reset and st.button("🔁 Resetar e Reprocessar", use_container_width=True):
+            try:
+                import os as _os_r
+                from supabase import create_client as _cc_r
+                _sb_r = _cc_r(_os_r.getenv('SUPABASE_URL',''), _os_r.getenv('SUPABASE_KEY',''))
+                _sb_r.table('resumos_safra').delete().eq('SAFRA', safra_reset).execute()
+                if safra_reset in st.session_state.resumos:
+                    del st.session_state.resumos[safra_reset]
+                st.success(f'✅ Resumo de {safra_reset} limpo — faça o upload e reprocesse.')
+            except Exception as _e_r:
+                st.error(f'Erro: {_e_r}')
+
+    st.markdown("---")
     if st.button("🗑️ Limpar dados", use_container_width=True):
         from pathlib import Path
         for f in Path(__file__).parent.glob('data/*.parquet'): f.unlink()
