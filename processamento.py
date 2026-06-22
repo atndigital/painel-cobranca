@@ -115,13 +115,21 @@ def _status_estorno(venc_1a, safra):
     if venc_1a is None or (isinstance(venc_1a, float) and pd.isna(venc_1a)):
         return 'SEM ESTORNO'
     try:
+        # Aceita datetime, date, Timestamp ou string
+        if isinstance(venc_1a, (datetime, date, pd.Timestamp)):
+            p = pd.Period(venc_1a.strftime('%Y-%m'), 'M')
+        else:
+            p = pd.Period(str(venc_1a)[:7], 'M')  # pega só YYYY-MM
+
+        if p.year < 2026:
+            return 'SEM ESTORNO'
+
         fech = pd.Period(FECHAMENTO_SAFRA.get(safra.upper(), '2026-06'), 'M')
-        p    = pd.Period(venc_1a, 'M')
-        if p.year < 2026:        return 'SEM ESTORNO'  # data corrompida
-        if p <= fech - 2:        return '2 FATURAS'
-        if p == fech - 1:        return '1 FATURA'
+        if p <= fech - 2:  return '2 FATURAS'
+        if p == fech - 1:  return '1 FATURA'
         return 'SEM ESTORNO'
-    except:
+    except Exception as e:
+        print(f"[_status_estorno] erro: {e} | venc_1a={venc_1a} | safra={safra}")
         return 'SEM ESTORNO'
 
 # ── Calcular etapa pelo dias de atraso ────────────────────────────────────────
