@@ -73,11 +73,12 @@ hr{border-color:#1E2535;margin:1.2rem 0;}
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 ETAPA_ORDER = ['Preventivo','Etapa 1','Etapa 2','Etapa 3','Etapa 4',
-               'Etapa 5','Etapa 6','Etapa 7','Etapa 8']
+               'Etapa 5','Etapa 6','Etapa 7','Etapa 8',
+               'Cobrança Final Sem Portin','Cobrança Final Com Portin']
 ETAPA_COR   = {'Preventivo':'#4ADE80','Etapa 1':'#FBBF24','Etapa 2':'#FBBF24',
                'Etapa 3':'#F87171','Etapa 4':'#F87171','Etapa 5':'#A78BFA',
                'Etapa 6':'#A78BFA','Etapa 7':'#94A3B8','Etapa 8':'#94A3B8',
-               'Urgente':'#FF6B35'}
+               'Cobrança Final Sem Portin':'#FF6B35','Cobrança Final Com Portin':'#FF3B3B'}
 
 def mc(label, value, sub='', tipo='', trend=''):
     trend_html = f'<div class="tr">{trend}</div>' if trend else ''
@@ -651,7 +652,8 @@ with tab4:
         'Etapa 6':    os.getenv('HSM_ETAPA6',     'hsm_etapa6'),
         'Etapa 7':    os.getenv('HSM_ETAPA7',     'hsm_etapa7'),
         'Etapa 8':    os.getenv('HSM_ETAPA8',     'hsm_etapa8'),
-        'Urgente':    os.getenv('HSM_URGENTE',    'fatura_urgente'),
+        'Cobrança Final Sem Portin': os.getenv('HSM_FINAL_SEM', 'tim_fatura_final'),
+        'Cobrança Final Com Portin': os.getenv('HSM_FINAL_COM', 'tim_fatura_urgente'),
     }
 
     st.markdown("### 📲 Envios do Dia")
@@ -836,7 +838,112 @@ with tab4:
         st.markdown('---')
         st.markdown('<div class="sec">🚨 Urgente — Portabilidade Concluída em estorno</div>', unsafe_allow_html=True)
 
-        # Urgente: exatamente 1 fatura aberta (não 2) + Port. Concluída
+        # ── Cobrança Final Sem Portin — 31+ dias sem Port. Concluída ──────────
+        st.markdown('---')
+        st.markdown('<div class="sec">🟠 Cobrança Final Sem Portin — 31+ dias sem portabilidade</div>', unsafe_allow_html=True)
+
+        if df is not None and len(df) > 0 and 'ETAPA' in df.columns:
+            _mask_sem = (
+                (df['PORTABILIDADE'] != 'Concluida') &
+                (df['DIAS ATRASO'] >= 31) &
+                (df['ETAPA'].notna()) &
+                (df.get('STATUS PAGAMENTO', pd.Series(dtype=str)).ne('BLOQUEADO'))
+            )
+            df_sem = df[_mask_sem].copy()
+        else:
+            df_sem = pd.DataFrame()
+
+        if len(df_sem) == 0:
+            st.markdown("<small style='color:#3B4163'>Nenhum cliente elegível.</small>", unsafe_allow_html=True)
+        else:
+            col_sh, col_sb = st.columns([3,1])
+            with col_sh:
+                st.markdown(
+                    f"<div style='display:flex;align-items:center;gap:10px;margin:.8rem 0 .4rem'>"
+                    f"<div style='width:10px;height:10px;border-radius:50%;background:#FF6B35'></div>"
+                    f"<span style='font-weight:600;color:#E8EAF0'>Cobrança Final Sem Portin</span>"
+                    f"<span style='color:#3B4163;font-size:.82rem'>{len(df_sem):,} clientes · 31+ dias sem portabilidade</span>"
+                    f"</div>", unsafe_allow_html=True)
+            with col_sb:
+                if st.button('🟠 Disparar Cb. Final Sem Portin', key='btn_cbfinalsem', use_container_width=True):
+                    st.session_state['confirmar_CbFinalSem'] = True
+
+            if st.session_state.get('confirmar_CbFinalSem'):
+                st.warning(f'⚠️ Confirmar envio de **{len(df_sem):,} clientes** (Cobrança Final Sem Portin)?')
+                col_sim, col_nao = st.columns(2)
+                with col_sim:
+                    if st.button('✅ Confirmar', key='sim_cbfinalsem', use_container_width=True):
+                        if not WEBHOOK_URL:
+                            st.error('Configure a URL do webhook n8n.')
+                        else:
+                            records = []
+                            for _, r in df_sem.iterrows():
+                                tel_p = str(r.get('NUMERO PORTADO','') or '').strip()
+                                venc  = r.get('VENCIMENTO')
+                                try: venc_fmt = pd.to_datetime(venc, errors='coerce').strftime('%d/%m/%Y')
+                                except: venc_fmt = ''
+                                records.append({
+                                    'CPF': str(r.get('CPF','') or ''),
+                                    'SAFRA': str(r.get('SAFRA','') or ''),
+                                    'ETAPA': 'Cobrança Final Sem Portin',
+                                    'HSM': HSM_MAP.get('Cobrança Final Sem Portin','tim_fatura_final'),
+                                    'PORTABILIDADE': str(r.get('PORTABILIDADE','') or ''),
+                                    'FATURA': int(r.get('FATURA',1) or 1),
+                                    'DIAS_ATRASO': int(r.get('DIAS ATRASO',0) or 0),
+                                    'TELEFONE_PORTADO': tel_p,
+                                    'NUMERO_LINHA': str(r.get('NUMERO LINHA','') or ''),
+                                    'hsm_numero': tel_p,
+                                    'hsm_nome': str(r.get('NOME','') or ''),
+                                    'hsm_valor': fmt_brl(r.get('VALOR')),
+                                    'hsm_vencimento': venc_fmt,
+                                })
+                            try:
+                                with st.spinner(f'Enviando {len(records):,} mensagens...'):
+                                    resp = _req.post(WEBHOOK_URL,
+                                        json={'etapa':'Cobrança Final Sem Portin',
+                                              'hsm':'tim_fatura_final',
+                                              'total':len(records),'data':str(hoje),
+                                              'clientes':records},
+                                        timeout=30)
+                                if resp.status_code in (200,201):
+                                    st.session_state.df_ctrl.loc[
+                                        st.session_state.df_ctrl['PORTABILIDADE'] != 'Concluida', 'ULTIMO ENVIO'
+                                    ] = str(hoje)
+                                    salvar_controle(st.session_state.df_ctrl)
+                                    registrar_envios_historico(df_sem, 'Cobrança Final Sem Portin', hoje)
+                                    st.session_state.hist_envios = carregar_historico_envios()
+                                    st.session_state.pop('confirmar_CbFinalSem', None)
+                                    st.success(f'✅ {len(records):,} mensagens enviadas!')
+                                    st.rerun()
+                                else:
+                                    st.error(f'Erro webhook: {resp.status_code}')
+                            except Exception as e:
+                                st.error(f'Erro: {e}')
+                with col_nao:
+                    if st.button('❌ Cancelar', key='nao_cbfinalsem', use_container_width=True):
+                        st.session_state.pop('confirmar_CbFinalSem', None)
+                        st.rerun()
+
+            cols_sem = ['SAFRA','NOME','NUMERO PORTADO','NUMERO LINHA','ETAPA',
+                        'VALOR','VENCIMENTO','DIAS ATRASO','PORTABILIDADE']
+            df_sem_show = df_sem[[c for c in cols_sem if c in df_sem.columns]].copy()
+            if 'VALOR' in df_sem_show.columns:
+                df_sem_show['VALOR'] = pd.to_numeric(df_sem_show['VALOR'], errors='coerce')
+            if 'VENCIMENTO' in df_sem_show.columns:
+                df_sem_show['VENCIMENTO'] = pd.to_datetime(df_sem_show['VENCIMENTO'], errors='coerce').dt.strftime('%d/%m/%Y')
+            df_sem_show = df_sem_show.replace({None:'','None':''})
+            st.dataframe(df_sem_show, use_container_width=True,
+                         height=min(250, 38+len(df_sem_show)*35), hide_index=True,
+                         column_config={
+                             'VALOR': st.column_config.NumberColumn('Valor', format='R$ %.2f'),
+                             'DIAS ATRASO': st.column_config.NumberColumn('Dias'),
+                         })
+            st.download_button('⬇️ Baixar lista Cb. Final Sem Portin',
+                               data=exportar_wpp(df_sem).encode('utf-8-sig'),
+                               file_name=f'cb_final_sem_{hoje}.csv',
+                               mime='text/csv', key='dl_cbfinalsem')
+
+        # Cobrança Final Com Portin: exatamente 1 fatura aberta (não 2) + Port. Concluída
         # Entra: cliente de 1 FATURA aberta OU cliente de 2 FATURAS com só 1 aberta
         # Não entra: cliente com as 2 faturas abertas simultaneamente
         if df is not None and len(df) > 0 and 'ETAPA' in df.columns:
@@ -865,14 +972,14 @@ with tab4:
                     f"<span style='color:#3B4163;font-size:.82rem'>{len(df_urg):,} clientes · Port. Concluída em estorno</span>"
                     f"</div>", unsafe_allow_html=True)
             with col_ub:
-                if st.button('🚨 Disparar Urgente', key='btn_urgente', use_container_width=True):
-                    st.session_state['confirmar_Urgente'] = True
+                if st.button('🚨 🔴 Disparar Cobrança Final Com Portin', key='btn_cbfinalcom', use_container_width=True):
+                    st.session_state['confirmar_CbFinalCom'] = True
 
-            if st.session_state.get('confirmar_Urgente'):
-                st.warning(f'⚠️ Confirmar envio urgente de **{len(df_urg):,} clientes** (Port. Concluída em estorno)?')
+            if st.session_state.get('confirmar_CbFinalCom'):
+                st.warning(f'⚠️ Confirmar envio Cobrança Final Com Portin de **{len(df_urg):,} clientes** (Port. Concluída em estorno)?')
                 col_sim, col_nao = st.columns(2)
                 with col_sim:
-                    if st.button('✅ Confirmar', key='sim_urgente', use_container_width=True):
+                    if st.button('✅ Confirmar', key='sim_cbfinalcom', use_container_width=True):
                         if not WEBHOOK_URL:
                             st.error('Configure a URL do webhook n8n.')
                         else:
@@ -885,8 +992,8 @@ with tab4:
                                 records.append({
                                     'CPF': str(r.get('CPF','') or ''),
                                     'SAFRA': str(r.get('SAFRA','') or ''),
-                                    'ETAPA': 'Urgente',
-                                    'HSM': HSM_MAP.get('Urgente',''),
+                                    'ETAPA': 'Cobrança Final Com Portin',
+                                    'HSM': HSM_MAP.get('Cobrança Final Com Portin',''),
                                     'PORTABILIDADE': 'Concluida',
                                     'FATURA': int(r.get('FATURA',1) or 1),
                                     'DIAS_ATRASO': int(r.get('DIAS ATRASO',0) or 0),
@@ -898,9 +1005,9 @@ with tab4:
                                     'hsm_vencimento': venc_fmt,
                                 })
                             try:
-                                with st.spinner(f'Enviando {len(records):,} mensagens urgentes...'):
+                                with st.spinner(f'Enviando {len(records):,} mensagens Cobrança Final Com Portin...'):
                                     resp = _req.post(WEBHOOK_URL,
-                                        json={'etapa':'Urgente','hsm':HSM_MAP.get('Urgente',''),
+                                        json={'etapa':'Cobrança Final Com Portin','hsm':HSM_MAP.get('Cobrança Final Com Portin',''),
                                               'total':len(records),'data':str(hoje),
                                               'clientes':records},
                                         timeout=30)
@@ -908,18 +1015,18 @@ with tab4:
                                     mask_urg = st.session_state.df_ctrl['PORTABILIDADE'] == 'Concluida'
                                     st.session_state.df_ctrl.loc[mask_urg, 'ULTIMO ENVIO'] = str(hoje)
                                     salvar_controle(st.session_state.df_ctrl)
-                                    registrar_envios_historico(df_urg, 'Urgente', hoje)
+                                    registrar_envios_historico(df_urg, 'Cobrança Final Com Portin', hoje)
                                     st.session_state.hist_envios = carregar_historico_envios()
-                                    st.session_state.pop('confirmar_Urgente', None)
-                                    st.success(f'✅ {len(records):,} mensagens urgentes enviadas!')
+                                    st.session_state.pop('confirmar_CbFinalCom', None)
+                                    st.success(f'✅ {len(records):,} mensagens Cobrança Final Com Portin enviadas!')
                                     st.rerun()
                                 else:
                                     st.error(f'Erro webhook: {resp.status_code}')
                             except Exception as e:
                                 st.error(f'Erro: {e}')
                 with col_nao:
-                    if st.button('❌ Cancelar', key='nao_urgente', use_container_width=True):
-                        st.session_state.pop('confirmar_Urgente', None)
+                    if st.button('❌ Cancelar', key='nao_cbfinalcom', use_container_width=True):
+                        st.session_state.pop('confirmar_CbFinalCom', None)
                         st.rerun()
 
             cols_urg = ['SAFRA','NOME','NUMERO PORTADO','NUMERO LINHA','ETAPA',
@@ -939,8 +1046,8 @@ with tab4:
             csv_urg = exportar_wpp(df_urg)
             st.download_button('⬇️ Baixar lista Urgente',
                                data=csv_urg.encode('utf-8-sig'),
-                               file_name=f'urgente_{hoje}.csv',
-                               mime='text/csv', key='dl_urgente')
+                               file_name=f'cb_final_com_{hoje}.csv',
+                               mime='text/csv', key='dl_cbfinalcom')
 
         # ── Painel de bloqueados ──────────────────────────────────────────────
         st.markdown('---')
@@ -1032,25 +1139,30 @@ with tab5:
 with tab6:
     st.markdown("### Funil de Cobrança — Regras de Envio")
     fluxo=[
-        ("D-2 antes do vencimento","Preventivo","Lembrete","Todos","🟢"),
+        ("D-2 antes do vencimento","Preventivo","Lembrete","Todos (em estorno)","🟢"),
         ("0 a 6 dias","—","Aguardar","—","⚪"),
         ("7 a 10 dias","Etapa 1","Cobrança","Todos","🟡"),
         ("11 a 15 dias","Etapa 2","Cobrança","Todos","🟡"),
         ("16 a 23 dias","Etapa 3","Cobrança","Todos","🔴"),
         ("24 a 30 dias","Etapa 4","Cobrança","Todos","🔴"),
+        ("31+ dias","Cobrança Final Sem Portin","Cobrança Final","Sem Port. Concluída","🟠"),
         ("31 a 42 dias","Etapa 5","Alto Potencial","Port. Concluída","🟣"),
         ("43 a 50 dias","Etapa 6","Alto Potencial","Port. Concluída","🟣"),
         ("51 a 62 dias","Etapa 7","Alto Potencial","Port. Concluída","⚫"),
         ("63 a 70 dias","Etapa 8","Alto Potencial","Port. Concluída","⚫"),
+        ("Qualquer","Cobrança Final Com Portin","Cobrança Urgente","1 fat. aberta + Port. Concluída","🔴"),
     ]
     df_fl=pd.DataFrame(fluxo,columns=['Dias de Atraso','Etapa','Tipo','Portabilidade',''])
     st.dataframe(df_fl,use_container_width=True,hide_index=True,height=400)
     st.markdown("---")
     st.markdown("""
 **Regras:**
-- Fatura mais urgente: quando há 2 abertas, considera a de **menor vencimento**
+- Quando há 2 faturas abertas, **cobramos as duas** na etapa correspondente
 - Etapas 5-8: **exclusivo** para Portabilidade Concluída
+- **Cobrança Final Sem Portin**: clientes 31+ dias sem Port. Concluída (HSM: tim_fatura_final)
+- **Cobrança Final Com Portin**: 1 fatura aberta + Port. Concluída (HSM: tim_fatura_urgente)
 - Cancelados/Bloqueados: apenas no resumo de estorno
+- Clientes SEM ESTORNO (ex: vencimento no mês de fechamento) não recebem cobrança
 - A cada atualização, um **snapshot** é salvo para rastrear a evolução % semana a semana
     """)
 
