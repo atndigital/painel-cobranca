@@ -829,13 +829,17 @@ with tab4:
         st.markdown('---')
         st.markdown('<div class="sec">🚨 Urgente — Portabilidade Concluída em estorno</div>', unsafe_allow_html=True)
 
-        # Urgente: somente 1 fatura aberta + Port. Concluída
+        # Urgente: exatamente 1 fatura aberta (não 2) + Port. Concluída
+        # Entra: cliente de 1 FATURA aberta OU cliente de 2 FATURAS com só 1 aberta
+        # Não entra: cliente com as 2 faturas abertas simultaneamente
         if df is not None and len(df) > 0 and 'ETAPA' in df.columns:
+            _st1 = df.get('STATUS 1ª FATURA', pd.Series(dtype=str)).fillna('')
+            _st2 = df.get('STATUS 2ª FATURA', pd.Series(dtype=str)).fillna('')
+            _n_abertas = (_st1 == 'Aberta').astype(int) + (_st2 == 'Aberta').astype(int)
             _mask_urg = (
                 (df['PORTABILIDADE'] == 'Concluida') &
                 (df['ETAPA'].notna()) &
-                (df.get('STATUS ESTORNO', pd.Series(dtype=str)) == '1 FATURA') &
-                (df['STATUS 1ª FATURA'] == 'Aberta') &
+                (_n_abertas == 1) &
                 (df.get('STATUS PAGAMENTO', pd.Series(dtype=str)).ne('BLOQUEADO'))
             )
             df_urg = df[_mask_urg].copy()
