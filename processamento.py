@@ -200,9 +200,14 @@ def processar_arquivo(uploaded_file, safra: str):
 
     # Parse vencimentos
     df['1ª fatura - Data de vencimento'] = pd.to_datetime(
-        df['1ª fatura - Data de vencimento'], format='%d/%m/%Y', errors='coerce')
+        df['1ª fatura - Data de vencimento'], dayfirst=True, errors='coerce')
     df['2ª fatura - Data de vencimento'] = pd.to_datetime(
-        df['2ª fatura - Data de vencimento'], format='%d/%m/%Y', errors='coerce')
+        df['2ª fatura - Data de vencimento'], dayfirst=True, errors='coerce')
+    # Debug: verificar quantos vencimentos foram parseados
+    n_venc = df['1ª fatura - Data de vencimento'].notna().sum()
+    print(f'[DEBUG] Vencimentos 1ª fatura parseados: {n_venc}/{len(df)}')
+    if n_venc > 0:
+        print(f'[DEBUG] Amostra: {df["1ª fatura - Data de vencimento"].dropna().iloc[0]}')
 
     # ── FILTRO 2: venc 1ª >= mês de ativação ─────────────────────────────────
     mask = (df['1ª fatura - Data de vencimento'].notna() &
