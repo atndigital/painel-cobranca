@@ -513,73 +513,70 @@ with tab2:
                 st.plotly_chart(fig_ev, use_container_width=True, config={'displayModeBar':False})
 
             # Detalhamento das categorias
-            _rows_det = res.get('rows') if res else []
             with st.expander("Ver detalhamento de faturas"):
+                _rows_det = res.get('rows') if res else []
                 if not _rows_det:
                     st.info("Reprocesse o arquivo da safra para ver o detalhamento atualizado.")
                 else:
-                        SIM = {'1 FATURA ABERTA','2 FATURAS (2 ABERTA)',
-                               '2 FATURAS (1 PAGA 2 ABERTA)','2 FATURAS ( 1 ABERTO 2 PAGA'}
+                    SIM = {'1 FATURA ABERTA','2 FATURAS (2 ABERTA)',
+                           '2 FATURAS (1 PAGA 2 ABERTA)','2 FATURAS ( 1 ABERTO 2 PAGA'}
 
-                        # Cancelados como primeira linha
-                        total_rows = [('Cancelados', NC, False)]  # NC definido acima no loop
-                        for label, t, pc_v, sp in res['rows']:
-                            if t == 0: continue
-                            total_rows.append((label, t, label in SIM))
+                    total_rows = [('Cancelados', NC, False)]
+                    for label, t, pc_v, sp in _rows_det:
+                        if t == 0: continue
+                        total_rows.append((label, t, label in SIM))
 
-                        # Cabeçalho
+                    st.markdown("""
+                    <div style='display:grid;grid-template-columns:2fr 1fr 1fr 1fr;
+                         gap:4px;padding:.3rem .6rem;margin-bottom:4px'>
+                        <span style='font-size:.68rem;font-weight:700;letter-spacing:.08em;
+                             text-transform:uppercase;color:#3B4163'>Categoria</span>
+                        <span style='font-size:.68rem;font-weight:700;letter-spacing:.08em;
+                             text-transform:uppercase;color:#3B4163;text-align:right'>Qtd</span>
+                        <span style='font-size:.68rem;font-weight:700;letter-spacing:.08em;
+                             text-transform:uppercase;color:#3B4163;text-align:right'>% Gross</span>
+                        <span style='font-size:.68rem;font-weight:700;letter-spacing:.08em;
+                             text-transform:uppercase;color:#3B4163;text-align:center'>Estorno?</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    for label, t, is_estorno in total_rows:
+                        cor   = "#F87171" if is_estorno else "#4ADE80"
+                        pct_v = f"{t/N:.1%}" if N else "—"
+                        badge = ('<span class="pill" style="background:#F8717122;color:#F87171">✗ Estorno</span>'
+                                 if is_estorno else
+                                 '<span class="pill" style="background:#4ADE8022;color:#4ADE80">✓ Ok</span>')
+                        bar_w = f"{t/N*100:.1f}%" if N else "0%"
                         st.markdown(f"""
                         <div style='display:grid;grid-template-columns:2fr 1fr 1fr 1fr;
-                             gap:4px;padding:.3rem .6rem;margin-bottom:4px'>
-                            <span style='font-size:.68rem;font-weight:700;letter-spacing:.08em;
-                                 text-transform:uppercase;color:#3B4163'>Categoria</span>
-                            <span style='font-size:.68rem;font-weight:700;letter-spacing:.08em;
-                                 text-transform:uppercase;color:#3B4163;text-align:right'>Qtd</span>
-                            <span style='font-size:.68rem;font-weight:700;letter-spacing:.08em;
-                                 text-transform:uppercase;color:#3B4163;text-align:right'>% do Gross</span>
-                            <span style='font-size:.68rem;font-weight:700;letter-spacing:.08em;
-                                 text-transform:uppercase;color:#3B4163;text-align:center'>Estorno?</span>
+                             align-items:center;gap:4px;padding:.35rem .6rem;border-radius:6px;
+                             margin-bottom:3px;background:#161B27;border-left:3px solid {cor};
+                             position:relative;overflow:hidden'>
+                            <div style='position:absolute;left:0;top:0;height:100%;
+                                 width:{bar_w};background:{cor}11;z-index:0'></div>
+                            <span style='font-size:.82rem;color:#9EA5C0;position:relative'>{label}</span>
+                            <span style='font-size:.88rem;font-weight:700;color:{cor};
+                                 text-align:right;font-family:DM Mono,monospace;position:relative'>{t:,}</span>
+                            <span style='font-size:.82rem;color:#5C6480;
+                                 text-align:right;position:relative'>{pct_v}</span>
+                            <div style='text-align:center;position:relative'>{badge}</div>
                         </div>
                         """, unsafe_allow_html=True)
 
-                        for label, t, is_estorno in total_rows:
-                            cor    = "#F87171" if is_estorno else "#4ADE80"
-                            pct_v  = f"{t/N:.1%}" if N else "—"
-                            badge  = (f'<span class="pill" style="background:#F8717122;color:#F87171">✗ Estorno</span>'
-                                      if is_estorno else
-                                      f'<span class="pill" style="background:#4ADE8022;color:#4ADE80">✓ Ok</span>')
-                            bar_w  = f"{t/N*100:.1f}%" if N else "0%"
-                            st.markdown(f"""
-                            <div style='display:grid;grid-template-columns:2fr 1fr 1fr 1fr;
-                                 align-items:center;gap:4px;padding:.35rem .6rem;border-radius:6px;
-                                 margin-bottom:3px;background:#161B27;border-left:3px solid {cor};
-                                 position:relative;overflow:hidden'>
-                                <div style='position:absolute;left:0;top:0;height:100%;
-                                     width:{bar_w};background:{cor}11;z-index:0'></div>
-                                <span style='font-size:.82rem;color:#9EA5C0;position:relative'>{label}</span>
-                                <span style='font-size:.88rem;font-weight:700;color:{cor};
-                                     text-align:right;font-family:DM Mono,monospace;position:relative'>{t:,}</span>
-                                <span style='font-size:.82rem;color:#5C6480;
-                                     text-align:right;position:relative'>{pct_v}</span>
-                                <div style='text-align:center;position:relative'>{badge}</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-
-                        # Totalizador
-                        total_estorno = sum(r[1] for r in total_rows if r[2])
-                        pct_est = f"{total_estorno/N:.1%}" if N else "—"
-                        st.markdown(f"""
-                        <div style='display:grid;grid-template-columns:2fr 1fr 1fr 1fr;
-                             align-items:center;gap:4px;padding:.4rem .6rem;border-radius:6px;
-                             margin-top:6px;background:#1E2535;border:1px solid #2D3452'>
-                            <span style='font-size:.82rem;font-weight:700;color:#C8CBE0'>Total em Estorno</span>
-                            <span style='font-size:.88rem;font-weight:700;color:#F87171;
-                                 text-align:right;font-family:DM Mono,monospace'>{total_estorno:,}</span>
-                            <span style='font-size:.82rem;font-weight:700;color:#F87171;
-                                 text-align:right'>{pct_est}</span>
-                            <div></div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                    total_estorno = sum(r[1] for r in total_rows if r[2])
+                    pct_est = f"{total_estorno/N:.1%}" if N else "—"
+                    st.markdown(f"""
+                    <div style='display:grid;grid-template-columns:2fr 1fr 1fr 1fr;
+                         align-items:center;gap:4px;padding:.4rem .6rem;border-radius:6px;
+                         margin-top:6px;background:#1E2535;border:1px solid #2D3452'>
+                        <span style='font-size:.82rem;font-weight:700;color:#C8CBE0'>Total em Estorno</span>
+                        <span style='font-size:.88rem;font-weight:700;color:#F87171;
+                             text-align:right;font-family:DM Mono,monospace'>{total_estorno:,}</span>
+                        <span style='font-size:.82rem;font-weight:700;color:#F87171;
+                             text-align:right'>{pct_est}</span>
+                        <div></div>
+                    </div>
+                    """, unsafe_allow_html=True)
             st.markdown("---")
 
         # Gráfico de pagamentos por etapa
