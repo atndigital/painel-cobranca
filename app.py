@@ -644,7 +644,7 @@ with tab4:
         'Etapa 6':    os.getenv('HSM_ETAPA6',     'hsm_etapa6'),
         'Etapa 7':    os.getenv('HSM_ETAPA7',     'hsm_etapa7'),
         'Etapa 8':    os.getenv('HSM_ETAPA8',     'hsm_etapa8'),
-        'Urgente':    os.getenv('HSM_URGENTE',    'hsm_urgente'),
+        'Urgente':    os.getenv('HSM_URGENTE',    'fatura_urgente'),
     }
 
     st.markdown("### 📲 Envios do Dia")
