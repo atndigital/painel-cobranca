@@ -65,23 +65,38 @@ def _carregar_conectadas_supabase():
     global _PORT_CACHE
     try:
         sb = _get_sb()
-        if not sb: return False
+        if not sb:
+            print("[CONECTADAS] Sem conexão Supabase")
+            return False
         todos = []
         offset = 0
-        while True:
-            res = sb.table('conectadas').select(
-                'NOME,TELEFONE_PORTADO,NUMERO_LINHA,PORTABILIDADE'
-            ).range(offset, offset+999).execute()
-            if not res.data: break
+        max_tentativas = 100  # segurança
+        tentativa = 0
+        print(f"[CONECTADAS] Iniciando carregamento...")
+        while tentativa < max_tentativas:
+            tentativa += 1
+            try:
+                res = sb.table('conectadas').select(
+                    'NOME,TELEFONE_PORTADO,NUMERO_LINHA,PORTABILIDADE'
+                ).range(offset, offset+999).execute()
+            except Exception as e_lote:
+                print(f"[CONECTADAS] Erro no lote {offset}: {e_lote}")
+                break
+            if not res.data:
+                break
             todos.extend(res.data)
-            if len(res.data) < 1000: break
+            print(f"[CONECTADAS] Lote {tentativa}: {len(todos)} registros acumulados")
+            if len(res.data) < 1000:
+                break
             offset += 1000
-        if not todos: return False
+        if not todos:
+            print("[CONECTADAS] Nenhum registro retornado")
+            return False
         _build_cache(pd.DataFrame(todos))
-        print(f"[CONECTADAS] ✓ Supabase: {len(todos)} registros")
+        print(f"[CONECTADAS] ✓ Cache montado: {len(todos)} registros")
         return True
     except Exception as e:
-        print(f"[CONECTADAS] Erro: {e}")
+        print(f"[CONECTADAS] Erro geral: {e}")
         return False
 
 def garantir_conectadas():
