@@ -972,8 +972,11 @@ with tab4:
         # Entra: cliente de 1 FATURA aberta OU cliente de 2 FATURAS com só 1 aberta
         # Não entra: cliente com as 2 faturas abertas simultaneamente
         if df is not None and len(df) > 0 and 'ETAPA' in df.columns:
-            _st1 = df.get('STATUS 1ª FATURA', pd.Series(dtype=str)).fillna('')
-            _st2 = df.get('STATUS 2ª FATURA', pd.Series(dtype=str)).fillna('')
+            # Detectar nome correto das colunas de status (com ou sem ª)
+            _col_st1 = next((c for c in df.columns if 'STATUS 1' in c and 'FATURA' in c), None)
+            _col_st2 = next((c for c in df.columns if 'STATUS 2' in c and 'FATURA' in c), None)
+            _st1 = df[_col_st1].fillna('') if _col_st1 else pd.Series('', index=df.index)
+            _st2 = df[_col_st2].fillna('') if _col_st2 else pd.Series('', index=df.index)
             _n_abertas = (_st1 == 'Aberta').astype(int) + (_st2 == 'Aberta').astype(int)
             _mask_urg = (
                 (df['PORTABILIDADE'] == 'Concluida') &
