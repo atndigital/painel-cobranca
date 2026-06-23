@@ -92,10 +92,13 @@ def fmt_brl(v):
     except: return '—'
 
 def fmt_tel(v):
-    s = str(int(float(v))) if v else ''
-    if len(s)==11: return f"({s[:2]}) {s[2:7]}-{s[7:]}"
-    if len(s)==10: return f"({s[:2]}) {s[2:6]}-{s[6:]}"
-    return s
+    try:
+        if not v or str(v).strip() in ('', 'None', 'nan'): return ''
+        s = str(int(float(str(v).strip())))
+        if len(s)==11: return f"({s[:2]}) {s[2:7]}-{s[7:]}"
+        if len(s)==10: return f"({s[:2]}) {s[2:6]}-{s[6:]}"
+        return s
+    except: return str(v) if v else ''  
 
 def pct(a,b,fmt=True):
     if not b: return '—' if fmt else 0
