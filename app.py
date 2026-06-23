@@ -266,6 +266,7 @@ else:
 
 # ── Cabeçalho ─────────────────────────────────────────────────────────────────
 st.markdown("# 📊 Painel de Cobrança")
+# v2026.06.23.04
 safras_at = df['SAFRA'].unique().tolist() if df is not None and len(df) > 0 else []
 st.markdown(f"<small style='color:#3B4163'>Safras: {' · '.join(safras_at) or 'Nenhuma'} — Hoje: {date.today().strftime('%d/%m/%Y')}</small>",
             unsafe_allow_html=True)
