@@ -338,8 +338,10 @@ def processar_arquivo(uploaded_file, safra: str):
             if st1 == 'Aberta' and venc1:
                 fat = {'num':1,'valor':val1,'vencimento':venc1,'dias':(today-venc1).days}
         elif status_est == '2 FATURAS':
+            # Só considera fatura aberta se o vencimento dela também está no período de estorno
+            _se2 = _status_estorno(venc2, safra) if venc2 else 'SEM ESTORNO'
             f1_aberta = st1 == 'Aberta' and venc1
-            f2_aberta = st2 == 'Aberta' and venc2
+            f2_aberta = st2 == 'Aberta' and venc2 and _se2 != 'SEM ESTORNO'
             if f1_aberta and f2_aberta:
                 # Pega a mais urgente (menor vencimento)
                 if venc1 <= venc2:
@@ -348,6 +350,8 @@ def processar_arquivo(uploaded_file, safra: str):
                     fat = {'num':2,'valor':val2,'vencimento':venc2,'dias':(today-venc2).days}
             elif f1_aberta:
                 fat = {'num':1,'valor':val1,'vencimento':venc1,'dias':(today-venc1).days}
+            elif f2_aberta:
+                fat = {'num':2,'valor':val2,'vencimento':venc2,'dias':(today-venc2).days}
             elif f2_aberta:
                 fat = {'num':2,'valor':val2,'vencimento':venc2,'dias':(today-venc2).days}
 
