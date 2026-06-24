@@ -692,6 +692,17 @@ with tab4:
     if df is None or len(df) == 0:
         st.info("Carregue um arquivo de safra para ver os envios do dia.")
     else:
+        # Filtro de safra para a Tab 4
+        _safras_t4 = sorted(df['SAFRA'].dropna().unique().tolist()) if 'SAFRA' in df.columns else []
+        _col_sf, _col_info = st.columns([2,3])
+        with _col_sf:
+            _safra_t4 = st.selectbox("📁 Filtrar por safra", ['Todas'] + _safras_t4, key='t4_safra')
+        df_t4 = df[df['SAFRA'] == _safra_t4].copy() if _safra_t4 != 'Todas' else df.copy()
+        with _col_info:
+            st.markdown(f"<small style='color:#5C6480'>{len(df_t4):,} clientes na safra selecionada</small>",
+                        unsafe_allow_html=True)
+        # Substituir df por df_t4 nesta tab
+        df = df_t4
         hoje = date.today()
         df_envio = df[df['ETAPA'].notna()].copy()
         # Converter ULTIMO ENVIO para date com segurança (pode vir como string do Supabase)
