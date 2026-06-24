@@ -398,10 +398,43 @@ with tab2:
         # Funil
         st.markdown('<div class="sec">Funil de cobrança</div>', unsafe_allow_html=True)
         ec = df['ETAPA'].value_counts() if 'ETAPA' in df.columns else pd.Series()
-        cols_f = st.columns(len(ETAPA_ORDER))
-        for i,et in enumerate(ETAPA_ORDER):
+
+        # Etapas normais no funil
+        FUNIL_ORDER = ['Preventivo','Etapa 1','Etapa 2','Etapa 3','Etapa 4',
+                       'Etapa 5','Etapa 6','Etapa 7','Etapa 8']
+        cols_f = st.columns(len(FUNIL_ORDER))
+        for i,et in enumerate(FUNIL_ORDER):
             n=int(ec.get(et,0)); cor=ETAPA_COR.get(et,'#fff')
             with cols_f[i]:
+                st.markdown(f"""<div style='text-align:center;background:#161B27;
+                    border:1px solid #1E2535;border-top:3px solid {cor};
+                    border-radius:8px;padding:.8rem .3rem'>
+                    <div style='font-size:.6rem;color:#3B4163;font-weight:700;
+                         letter-spacing:.08em;text-transform:uppercase'>{et}</div>
+                    <div style='font-size:1.5rem;font-weight:700;color:{cor};
+                         font-family:DM Mono,monospace;margin:.2rem 0'>{n:,}</div>
+                </div>""",unsafe_allow_html=True)
+
+        # Cards das etapas especiais
+        st.markdown('<div class="sec" style="margin-top:.8rem">Etapas de cobrança final</div>',
+                    unsafe_allow_html=True)
+        _etapas_esp = ['Cobrança Final Sem Portin','Cobrança Final Com Portin']
+        cols_esp = st.columns(2)
+        for i, et in enumerate(_etapas_esp):
+            n   = int(ec.get(et, 0))
+            cor = ETAPA_COR.get(et, '#FF6B35')
+            # Para Cobrança Final Com Portin — contar direto do df com filtro
+            if et == 'Cobrança Final Com Portin' and df is not None and len(df) > 0:
+                _col_st1 = next((c for c in df.columns if 'STATUS 1' in c and 'FATURA' in c), None)
+                _col_st2 = next((c for c in df.columns if 'STATUS 2' in c and 'FATURA' in c), None)
+                if _col_st1 and _col_st2:
+                    _st1 = df[_col_st1].fillna('')
+                    _st2 = df[_col_st2].fillna('')
+                    _n_ab = (_st1 == 'Aberta').astype(int) + (_st2 == 'Aberta').astype(int)
+                    n = int(((df['PORTABILIDADE'] == 'Concluida') & (_n_ab == 1) & df['ETAPA'].notna()).sum())
+            elif et == 'Cobrança Final Sem Portin' and df is not None and len(df) > 0:
+                n = int(((df['PORTABILIDADE'] != 'Concluida') & (df['DIAS ATRASO'] >= 31) & df['ETAPA'].notna()).sum()) if 'DIAS ATRASO' in df.columns else n
+            with cols_esp[i]:
                 st.markdown(f"""<div style='text-align:center;background:#161B27;
                     border:1px solid #1E2535;border-top:3px solid {cor};
                     border-radius:8px;padding:.8rem .3rem'>
