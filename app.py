@@ -73,8 +73,7 @@ hr{border-color:#1E2535;margin:1.2rem 0;}
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 ETAPA_ORDER = ['Preventivo','Etapa 1','Etapa 2','Etapa 3','Etapa 4',
-               'Etapa 5','Etapa 6','Etapa 7','Etapa 8',
-               'Cobrança Final Sem Portin','Cobrança Final Com Portin']
+               'Etapa 5','Etapa 6','Etapa 7','Etapa 8']
 ETAPA_COR   = {'Preventivo':'#4ADE80','Etapa 1':'#FBBF24','Etapa 2':'#FBBF24',
                'Etapa 3':'#F87171','Etapa 4':'#F87171','Etapa 5':'#A78BFA',
                'Etapa 6':'#A78BFA','Etapa 7':'#94A3B8','Etapa 8':'#94A3B8',
