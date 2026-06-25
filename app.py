@@ -1148,11 +1148,10 @@ with tab4:
 # TAB 5 — HISTÓRICO DE ENVIOS
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 with tab5:
-    st.markdown("### 📋 Histórico de Envios por Cliente")
-    st.markdown("<small style='color:#3B4163'>Uma linha por cliente — colunas mostram a data de cada envio por etapa</small>",
-                unsafe_allow_html=True)
+    st.markdown("### 📋 Histórico de Envios")
 
     df_he = st.session_state.hist_envios
+
     if df_he is None or len(df_he) == 0:
         st.markdown("""<div style='text-align:center;padding:4rem;color:#3B4163'>
             <div style='font-size:3rem'>📋</div>
@@ -1160,34 +1159,87 @@ with tab5:
             <div style='font-size:.85rem;margin-top:.5rem'>Os envios aparecem aqui automaticamente após cada disparo</div>
         </div>""", unsafe_allow_html=True)
     else:
-        # Métricas
+        # ── Cards por etapa ───────────────────────────────────────────────────
+        st.markdown('<div class="sec">Total enviado por etapa</div>', unsafe_allow_html=True)
+
+        TODAS_ETAPAS = ['Preventivo','Etapa 1','Etapa 2','Etapa 3','Etapa 4',
+                        'Etapa 5','Etapa 6','Etapa 7','Etapa 8',
+                        'Cobrança Final Sem Portin','Cobrança Final Com Portin']
+
+        # Calcular totais e último envio por etapa
+        etapa_stats = {}
+        for et in TODAS_ETAPAS:
+            if et in df_he.columns:
+                n = int(df_he[et].notna().sum())
+                ultimo = df_he[et].dropna().max() if n > 0 else None
+                etapa_stats[et] = {'n': n, 'ultimo': str(ultimo)[:10] if ultimo else '—'}
+            else:
+                etapa_stats[et] = {'n': 0, 'ultimo': '—'}
+
+        # Linha 1 — etapas normais
+        cols_e1 = st.columns(9)
+        etapas_l1 = ['Preventivo','Etapa 1','Etapa 2','Etapa 3','Etapa 4',
+                     'Etapa 5','Etapa 6','Etapa 7','Etapa 8']
+        for i, et in enumerate(etapas_l1):
+            cor = ETAPA_COR.get(et, '#fff')
+            st = etapa_stats[et]
+            with cols_e1[i]:
+                import streamlit as _st
+                _st.markdown(f"""<div style='text-align:center;background:#161B27;
+                    border:1px solid #1E2535;border-top:3px solid {cor};
+                    border-radius:8px;padding:.6rem .2rem;margin-bottom:.4rem'>
+                    <div style='font-size:.55rem;color:#3B4163;font-weight:700;
+                         letter-spacing:.06em;text-transform:uppercase;margin-bottom:.2rem'>{et}</div>
+                    <div style='font-size:1.3rem;font-weight:700;color:{cor};
+                         font-family:DM Mono,monospace'>{st['n']:,}</div>
+                    <div style='font-size:.6rem;color:#5C6480;margin-top:.1rem'>{st['ultimo']}</div>
+                </div>""", unsafe_allow_html=True)
+
+        # Linha 2 — etapas especiais
+        cols_e2 = st.columns(2)
+        etapas_l2 = ['Cobrança Final Sem Portin','Cobrança Final Com Portin']
+        for i, et in enumerate(etapas_l2):
+            cor = ETAPA_COR.get(et, '#FF6B35')
+            s = etapa_stats[et]
+            with cols_e2[i]:
+                import streamlit as _st2
+                _st2.markdown(f"""<div style='text-align:center;background:#161B27;
+                    border:1px solid #1E2535;border-top:3px solid {cor};
+                    border-radius:8px;padding:.6rem .2rem;margin-bottom:.4rem'>
+                    <div style='font-size:.6rem;color:#3B4163;font-weight:700;
+                         letter-spacing:.06em;text-transform:uppercase;margin-bottom:.2rem'>{et}</div>
+                    <div style='font-size:1.3rem;font-weight:700;color:{cor};
+                         font-family:DM Mono,monospace'>{s['n']:,}</div>
+                    <div style='font-size:.6rem;color:#5C6480;margin-top:.1rem'>{s['ultimo']}</div>
+                </div>""", unsafe_allow_html=True)
+
+        st.markdown('---')
+
+        # ── Tabela detalhada ──────────────────────────────────────────────────
+        st.markdown('<div class="sec">Detalhamento por cliente</div>', unsafe_allow_html=True)
+
         total_clientes = len(df_he)
-        # Quantos receberam pelo menos 1 mensagem
-        etapa_cols = [c for c in ETAPA_ORDER if c in df_he.columns]
-        receberam  = int(df_he[etapa_cols].notna().any(axis=1).sum()) if etapa_cols else 0
+        etapa_cols = [c for c in TODAS_ETAPAS if c in df_he.columns]
+        receberam = int(df_he[etapa_cols].notna().any(axis=1).sum()) if etapa_cols else 0
+        mais_enviada = '—'
+        if etapa_cols:
+            contagens = {et: int(df_he[et].notna().sum()) for et in etapa_cols if et in df_he.columns}
+            if contagens: mais_enviada = max(contagens, key=contagens.get)
 
         h1, h2, h3 = st.columns(3)
         with h1: st.markdown(mc('Clientes no histórico', f'{total_clientes:,}', tipo='azul'), unsafe_allow_html=True)
         with h2: st.markdown(mc('Receberam mensagem', f'{receberam:,}', tipo='verde'), unsafe_allow_html=True)
-        with h3:
-            # Etapa com mais envios
-            mais_enviada = '—'
-            if etapa_cols:
-                contagens = {et: int(df_he[et].notna().sum()) for et in etapa_cols if et in df_he.columns}
-                if contagens:
-                    mais_enviada = max(contagens, key=contagens.get)
-            st.markdown(mc('Etapa mais enviada', mais_enviada, tipo='roxo'), unsafe_allow_html=True)
+        with h3: st.markdown(mc('Etapa mais enviada', mais_enviada, tipo='roxo'), unsafe_allow_html=True)
 
         st.markdown('---')
 
         # Filtros
         col_f1, col_f2 = st.columns(2)
         with col_f1:
-            safras_he = ['Todas'] + sorted(df_he['SAFRA'].dropna().unique().tolist()) \
-                        if 'SAFRA' in df_he.columns else ['Todas']
+            safras_he = ['Todas'] + sorted(df_he['SAFRA'].dropna().unique().tolist())                         if 'SAFRA' in df_he.columns else ['Todas']
             filtro_he_safra = st.selectbox('Safra', safras_he, key='he_safra')
         with col_f2:
-            filtro_he_etapa = st.selectbox('Etapa enviada', ['Todas'] + ETAPA_ORDER, key='he_etapa')
+            filtro_he_etapa = st.selectbox('Etapa enviada', ['Todas'] + TODAS_ETAPAS, key='he_etapa')
 
         df_he_f = df_he.copy()
         if filtro_he_safra != 'Todas' and 'SAFRA' in df_he_f.columns:
@@ -1195,24 +1247,20 @@ with tab5:
         if filtro_he_etapa != 'Todas' and filtro_he_etapa in df_he_f.columns:
             df_he_f = df_he_f[df_he_f[filtro_he_etapa].notna()]
 
-        # Colunas a exibir
         base_cols = ['SAFRA','NOME','NUMERO PORTADO','NUMERO LINHA','CPF','PORTABILIDADE']
-        etapa_display = [c for c in ETAPA_ORDER if c in df_he_f.columns]
+        etapa_display = [c for c in TODAS_ETAPAS if c in df_he_f.columns]
         show_cols = [c for c in base_cols if c in df_he_f.columns] + etapa_display
-
         df_he_show = df_he_f[show_cols].copy()
         df_he_show = df_he_show.fillna('').replace('None','')
 
-        st.dataframe(df_he_show, use_container_width=True, height=450, hide_index=True)
+        st.dataframe(df_he_show, use_container_width=True, height=420, hide_index=True)
 
-        # Export
         buf = io.BytesIO()
         df_he_show.to_excel(buf, index=False, engine='openpyxl')
         st.download_button('⬇️ Exportar XLSX',
                            data=buf.getvalue(),
                            file_name=f'historico_envios_{date.today().strftime("%Y%m%d")}.xlsx',
                            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-
 
 with tab6:
     st.markdown("### Funil de Cobrança — Regras de Envio")
