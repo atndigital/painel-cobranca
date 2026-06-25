@@ -870,7 +870,8 @@ with tab4:
                                     registrar_envios_historico(df_et, etapa, hoje)
                                     st.session_state.hist_envios = carregar_historico_envios()
                                     st.session_state.pop(f'confirmar_{etapa}', None)
-                                    st.success(f'✅ {len(records):,} mensagens enviadas com sucesso! ({etapa})')
+                                    st.toast(f'✅ Webhook confirmado — {etapa}', icon='✅')
+                                    st.success(f'✅ **{etapa}** · {len(records):,} mensagens enviadas ao webhook com sucesso!')
                                     st.rerun()
                                 else:
                                     st.error(f'Erro webhook: {resp.status_code} — {resp.text[:200]}')
@@ -985,7 +986,8 @@ with tab4:
                                     registrar_envios_historico(df_sem, 'Cobrança Final Sem Portin', hoje)
                                     st.session_state.hist_envios = carregar_historico_envios()
                                     st.session_state.pop('confirmar_CbFinalSem', None)
-                                    st.success(f'✅ {len(records):,} mensagens enviadas!')
+                                    st.toast(f'✅ Webhook confirmado — Cb. Final Sem Portin', icon='✅')
+                                    st.success(f'✅ **Cobrança Final Sem Portin** · {len(records):,} mensagens enviadas ao webhook com sucesso!')
                                     st.rerun()
                                 else:
                                     st.error(f'Erro webhook: {resp.status_code}')
@@ -1093,7 +1095,8 @@ with tab4:
                                     registrar_envios_historico(df_urg, 'Cobrança Final Com Portin', hoje)
                                     st.session_state.hist_envios = carregar_historico_envios()
                                     st.session_state.pop('confirmar_CbFinalCom', None)
-                                    st.success(f'✅ {len(records):,} mensagens Cobrança Final Com Portin enviadas!')
+                                    st.toast(f'✅ Webhook confirmado — Cb. Final Com Portin', icon='✅')
+                                    st.success(f'✅ **Cobrança Final Com Portin** · {len(records):,} mensagens enviadas ao webhook com sucesso!')
                                     st.rerun()
                                 else:
                                     st.error(f'Erro webhook: {resp.status_code}')
