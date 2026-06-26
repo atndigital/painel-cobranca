@@ -744,7 +744,10 @@ with tab4:
             df_envio['_ULT_DT'] = None
         df_envio_hoje = df_envio[
             df_envio['_ULT_DT'].isna() |
-            df_envio['_ULT_DT'].apply(lambda d: d < hoje if pd.notna(d) and d is not None else True)
+            df_envio['_ULT_DT'].apply(lambda d: (
+                d < hoje if (pd.notna(d) and d is not None and str(d) not in ('','None','nan','NaT'))
+                else True
+            ))
         ].copy()
 
         por_etapa = df_envio_hoje['ETAPA'].value_counts()
@@ -1181,36 +1184,34 @@ with tab5:
         etapas_l1 = ['Preventivo','Etapa 1','Etapa 2','Etapa 3','Etapa 4',
                      'Etapa 5','Etapa 6','Etapa 7','Etapa 8']
         for i, et in enumerate(etapas_l1):
-            cor = ETAPA_COR.get(et, '#fff')
-            st = etapa_stats[et]
+            cor  = ETAPA_COR.get(et, '#fff')
+            _est = etapa_stats[et]
             with cols_e1[i]:
-                import streamlit as _st
-                _st.markdown(f"""<div style='text-align:center;background:#161B27;
+                st.markdown(f"""<div style='text-align:center;background:#161B27;
                     border:1px solid #1E2535;border-top:3px solid {cor};
                     border-radius:8px;padding:.6rem .2rem;margin-bottom:.4rem'>
                     <div style='font-size:.55rem;color:#3B4163;font-weight:700;
                          letter-spacing:.06em;text-transform:uppercase;margin-bottom:.2rem'>{et}</div>
                     <div style='font-size:1.3rem;font-weight:700;color:{cor};
-                         font-family:DM Mono,monospace'>{st['n']:,}</div>
-                    <div style='font-size:.6rem;color:#5C6480;margin-top:.1rem'>{st['ultimo']}</div>
+                         font-family:DM Mono,monospace'>{_est['n']:,}</div>
+                    <div style='font-size:.6rem;color:#5C6480;margin-top:.1rem'>{_est['ultimo']}</div>
                 </div>""", unsafe_allow_html=True)
 
         # Linha 2 — etapas especiais
         cols_e2 = st.columns(2)
         etapas_l2 = ['Cobrança Final Sem Portin','Cobrança Final Com Portin']
         for i, et in enumerate(etapas_l2):
-            cor = ETAPA_COR.get(et, '#FF6B35')
-            s = etapa_stats[et]
+            cor  = ETAPA_COR.get(et, '#FF6B35')
+            _est = etapa_stats[et]
             with cols_e2[i]:
-                import streamlit as _st2
-                _st2.markdown(f"""<div style='text-align:center;background:#161B27;
+                st.markdown(f"""<div style='text-align:center;background:#161B27;
                     border:1px solid #1E2535;border-top:3px solid {cor};
                     border-radius:8px;padding:.6rem .2rem;margin-bottom:.4rem'>
                     <div style='font-size:.6rem;color:#3B4163;font-weight:700;
                          letter-spacing:.06em;text-transform:uppercase;margin-bottom:.2rem'>{et}</div>
                     <div style='font-size:1.3rem;font-weight:700;color:{cor};
-                         font-family:DM Mono,monospace'>{s['n']:,}</div>
-                    <div style='font-size:.6rem;color:#5C6480;margin-top:.1rem'>{s['ultimo']}</div>
+                         font-family:DM Mono,monospace'>{_est['n']:,}</div>
+                    <div style='font-size:.6rem;color:#5C6480;margin-top:.1rem'>{_est['ultimo']}</div>
                 </div>""", unsafe_allow_html=True)
 
         st.markdown('---')
