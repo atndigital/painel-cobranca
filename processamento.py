@@ -230,10 +230,18 @@ def processar_arquivo(uploaded_file, safra: str):
     garantir_conectadas()
     con = _PORT_CACHE
 
-    # Ler arquivo
+    # Ler arquivo — tenta utf-8, fallback para latin-1
     name = uploaded_file.name.lower()
     if name.endswith('.csv'):
-        df_raw = pd.read_csv(uploaded_file, encoding='utf-8', sep=None, engine='python')
+        try:
+            df_raw = pd.read_csv(uploaded_file, encoding='utf-8', sep=None, engine='python')
+        except UnicodeDecodeError:
+            uploaded_file.seek(0)
+            try:
+                df_raw = pd.read_csv(uploaded_file, encoding='latin-1', sep=None, engine='python')
+            except Exception:
+                uploaded_file.seek(0)
+                df_raw = pd.read_csv(uploaded_file, encoding='cp1252', sep=None, engine='python')
     else:
         df_raw = pd.read_excel(uploaded_file, engine='openpyxl')
 
