@@ -1300,22 +1300,13 @@ with tab6:
 with tab7:
     st.markdown("### 📊 Interações dos Clientes no WhatsApp")
 
-    # Auto-refresh a cada 30 segundos
-    import time as _time
     _col_title, _col_refresh = st.columns([4,1])
     with _col_title:
-        st.markdown("<small style='color:#3B4163'>Clientes que clicaram em Boleto, Pix ou Bloquear · atualiza a cada 30s</small>",
+        st.markdown("<small style='color:#3B4163'>Clientes que clicaram em Boleto, Pix ou Bloquear</small>",
                     unsafe_allow_html=True)
     with _col_refresh:
         if st.button("🔄 Atualizar", key="refresh_int", use_container_width=True):
             st.rerun()
-
-    # Controle de auto-refresh
-    if 'last_refresh_int' not in st.session_state:
-        st.session_state.last_refresh_int = _time.time()
-    if _time.time() - st.session_state.last_refresh_int > 30:
-        st.session_state.last_refresh_int = _time.time()
-        st.rerun()
 
     # Carregar tabela respostas_clientes do Supabase
     _df_int = pd.DataFrame()
