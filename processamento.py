@@ -247,9 +247,21 @@ def processar_arquivo(uploaded_file, safra: str):
 
     df = df_raw.copy()
 
-    # Parse data de ativação
+    # Parse data de ativação — tolerante a formato, com auditoria de descarte
+    import streamlit as st
+    _raw_ativ = df['Data da ativação'].copy()
     df['Data da ativação'] = pd.to_datetime(
         df['Data da ativação'], format='%d/%m/%Y', errors='coerce')
+    _falhas = df['Data da ativação'].isna() & _raw_ativ.notna()
+    if _falhas.any():
+        # 2ª tentativa: parse genérico dayfirst para formatos divergentes
+        df.loc[_falhas, 'Data da ativação'] = pd.to_datetime(
+            _raw_ativ[_falhas], dayfirst=True, errors='coerce')
+    _nat = int((df['Data da ativação'].isna() & _raw_ativ.notna()).sum())
+    if _nat > 0:
+        _ex = _raw_ativ[df['Data da ativação'].isna() & _raw_ativ.notna()].iloc[0]
+        st.warning(f"⚠️ {_nat} linha(s) com 'Data da ativação' ilegível foram "
+                   f"descartadas. Exemplo do valor recebido: {_ex!r}")
 
     # ── FILTRO 1: somente mês E ano exatos da safra ───────────────────────────
     mes_num = MES_SAFRA.get(safra.upper(), 3)
@@ -399,6 +411,7 @@ def processar_arquivo(uploaded_file, safra: str):
 
 # ── Salvar safra no Supabase (cliente por cliente, substitui) ─────────────────
 def _salvar_safra_supabase(df: pd.DataFrame, safra: str, linhas_conectadas: int = 0):
+    import streamlit as st
     try:
         sb = _get_sb()
         if not sb: return
@@ -449,6 +462,7 @@ def _salvar_safra_supabase(df: pd.DataFrame, safra: str, linhas_conectadas: int 
             json.dumps(records[:1])
         except Exception as e_json:
             print(f"[SAFRAS] JSON inválido: {e_json}")
+            st.warning(f"⚠️ Tabela 'safras' não salva — JSON inválido: {e_json}")
             return
 
         for i in range(0, len(records), 500):
@@ -456,9 +470,11 @@ def _salvar_safra_supabase(df: pd.DataFrame, safra: str, linhas_conectadas: int 
                 sb.table("safras").insert(records[i:i+500]).execute()
             except Exception as e_insert:
                 print(f"[SAFRAS] Erro insert lote {i}: {e_insert}")
+                st.warning(f"⚠️ Tabela 'safras' — erro no insert: {e_insert}")
         print(f"[SAFRAS] ✓ {safra}: {faturas_enc} registros | cobertura {cobertura}%")
     except Exception as e:
         print(f"[SAFRAS] Erro: {e}")
+        st.warning(f"⚠️ Tabela 'safras' não salva: {e}")
 
 # ── Resumo analítico ──────────────────────────────────────────────────────────
 def calcular_resumo_base(df_base: pd.DataFrame, safra: str) -> dict:

@@ -173,6 +173,24 @@ with st.sidebar:
                 st.info(f"🔍 Debug CONECTADAS: {_cache_sz} entradas no cache | Carregado: {conectadas_carregado()}")
                 # ─────────────────────────────────────────────────────────
                 df_novo, res_novo = processar_arquivo(uploaded, safra_sel)
+
+                # ── GUARDA: arquivo encolheu? aborta ANTES de salvar ──────
+                _snaps_g = st.session_state.snaps
+                if _snaps_g is not None and len(_snaps_g) > 0 and 'SAFRA' in _snaps_g.columns:
+                    _prev_g = _snaps_g[_snaps_g['SAFRA'] == safra_sel]
+                    if len(_prev_g) > 0:
+                        _gross_ant  = int(_prev_g.sort_values('DATA').iloc[-1]['GROSS'])
+                        _gross_novo = int(res_novo['N'])
+                        if _gross_ant > 0 and _gross_novo < _gross_ant * 0.95:
+                            st.error(
+                                f"🛑 Upload abortado: o arquivo tem {_gross_novo:,} "
+                                f"clientes da safra {safra_sel}, mas o último processamento "
+                                f"tinha {_gross_ant:,} (queda de {1 - _gross_novo/_gross_ant:.0%}). "
+                                f"Provável arquivo incompleto ou formato de data alterado. "
+                                f"Nada foi salvo — verifique o export e tente novamente.")
+                            st.stop()
+                # ──────────────────────────────────────────────────────────
+
                 df_upd, df_hist_new = atualizar_banco(
                     st.session_state.df_ctrl, df_novo, safra_sel)
                 st.session_state.df_ctrl = df_upd

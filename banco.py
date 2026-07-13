@@ -53,13 +53,17 @@ def _to_records(df):
     return [{k: _cv(v) for k, v in row.items()} for row in df.to_dict('records')]
 
 def _insert_lotes(sb, tabela, records, lote=500):
-    total = 0
+    import streamlit as st
+    total, erros = 0, []
     for i in range(0, len(records), lote):
         try:
             res = sb.table(tabela).insert(records[i:i+lote]).execute()
             total += len(res.data) if res.data else len(records[i:i+lote])
         except Exception as e:
+            erros.append(f"lote {i}: {e}")
             print(f"[Supabase] insert {tabela} lote {i}: {e}")
+    if erros:
+        st.warning(f"⚠️ {tabela}: {len(erros)} lote(s) falharam ao inserir — {erros[0]}")
     print(f"[Supabase] ✓ {tabela}: {total} inseridos")
     return total
 
@@ -107,17 +111,30 @@ def carregar_controle() -> pd.DataFrame:
     return _safe_read(CTRL_FILE)
 
 def salvar_controle(df: pd.DataFrame):
+    import json
+    import streamlit as st
     df = _normalizar_ctrl(df)
     _safe_write(df, CTRL_FILE)
     sb = _get_sb()
     if not sb: return
     try:
+        # 1) Montar e validar o payload ANTES de tocar na tabela
+        records = _to_records(df) if len(df) else []
+        if records:
+            json.dumps(records[0])  # explode aqui se houver valor não-serializável
+        # 2) Só então substituir
         sb.table('controle_envio').delete().gt('id', 0).execute()
-        if len(df) == 0: return
-        records = _to_records(df)
-        _insert_lotes(sb, 'controle_envio', records)
+        if not records:
+            return
+        inseridos = _insert_lotes(sb, 'controle_envio', records)
+        # 3) Conferência: o que entrou bate com o que devia entrar?
+        if inseridos < len(records):
+            st.error(f"❌ controle_envio: apenas {inseridos}/{len(records)} linhas "
+                     f"salvas no Supabase. NÃO dispare cobranças até corrigir!")
     except Exception as e:
+        st.error(f"❌ Falha ao salvar controle_envio no Supabase: {e}")
         print(f"[Supabase] salvar_controle: {e}")
+        raise
 
 # ── HISTÓRICO DE PAGAMENTOS ───────────────────────────────────────────────────
 def carregar_historico() -> pd.DataFrame:
@@ -135,15 +152,26 @@ def carregar_historico() -> pd.DataFrame:
     return _safe_read(HIST_FILE)
 
 def salvar_historico(df: pd.DataFrame):
+    import json
+    import streamlit as st
     _safe_write(df, HIST_FILE)
     sb = _get_sb()
     if not sb: return
     try:
+        records = _to_records(df) if len(df) else []
+        if records:
+            json.dumps(records[0])  # valida antes de deletar
         sb.table('historico_pagamentos').delete().gt('id', 0).execute()
-        if len(df) == 0: return
-        _insert_lotes(sb, 'historico_pagamentos', _to_records(df))
+        if not records:
+            return
+        inseridos = _insert_lotes(sb, 'historico_pagamentos', records)
+        if inseridos < len(records):
+            st.error(f"❌ historico_pagamentos: apenas {inseridos}/{len(records)} "
+                     f"linhas salvas no Supabase.")
     except Exception as e:
+        st.error(f"❌ Falha ao salvar historico_pagamentos no Supabase: {e}")
         print(f"[Supabase] salvar_historico: {e}")
+        raise
 
 # ── SNAPSHOTS ─────────────────────────────────────────────────────────────────
 def carregar_snapshots() -> pd.DataFrame:
