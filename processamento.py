@@ -355,13 +355,13 @@ def processar_arquivo(uploaded_file, safra: str):
         # Em ambos os casos: 1 linha por cliente nas etapas normais
         fat = None
         if status_est == '1 FATURA':
-            if st1 == 'Aberta' and venc1:
+            if st1 not in PAGA_S and venc1:
                 fat = {'num':1,'valor':val1,'vencimento':venc1,'dias':(today-venc1).days}
         elif status_est == '2 FATURAS':
             # Só considera fatura aberta se o vencimento dela também está no período de estorno
             _se2 = _status_estorno(venc2, safra) if venc2 else 'SEM ESTORNO'
-            f1_aberta = st1 == 'Aberta' and venc1
-            f2_aberta = st2 == 'Aberta' and venc2 and _se2 != 'SEM ESTORNO'
+            f1_aberta = st1 not in PAGA_S and venc1
+            f2_aberta = st2 not in PAGA_S and venc2 and _se2 != 'SEM ESTORNO'
             if f1_aberta and f2_aberta:
                 # Pega a mais urgente (menor vencimento)
                 if venc1 <= venc2:
@@ -500,7 +500,7 @@ def calcular_resumo_base(df_base: pd.DataFrame, safra: str) -> dict:
         se = str(row.get('STATUS ESTORNO') or '').strip()
         s1 = str(row.get('1ª fatura - Status da fatura') or '').strip()
         s2 = str(row.get('2ª fatura - Status da fatura') or '').strip()
-        f1p=s1 in PAGA_S; f1a=s1=='Aberta'; f2p=s2 in PAGA_S; f2a=s2=='Aberta'
+        f1p=s1 in PAGA_S; f1a=not f1p and bool(s1); f2p=s2 in PAGA_S; f2a=not f2p and bool(s2)
         if se == 'SEM ESTORNO': return 'SEM ESTORNO'
         if se == '1 FATURA':
             if f1a: return '1 FATURA ABERTA'
