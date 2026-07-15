@@ -525,8 +525,15 @@ with tab2:
             with c1:
                 sub_gross = f"✅ Ativos: {NA:,} ({pct(NA,N)})  ❌ Canc: {NC:,} ({pct(NC,N)})"
                 if _cob_data:
-                    lin = _cob_data.get('LINHAS_CONECTADAS') or 0
-                    fat = _cob_data.get('FATURAS_ENCONTRADAS') or 0
+                    def _to_int(v):
+                        try:
+                            if isinstance(v, str):
+                                v = v.replace('.', '').replace(',', '.')
+                            return int(float(v))
+                        except (TypeError, ValueError):
+                            return 0
+                    lin = _to_int(_cob_data.get('LINHAS_CONECTADAS'))
+                    fat = _to_int(_cob_data.get('FATURAS_ENCONTRADAS'))
                     cob = float(_cob_data.get('COBERTURA_PCT') or 0)
                     cor_cob = 'verde' if cob >= 88 else 'amarelo' if cob >= 80 else 'verm'
                     sub_gross += f"<br>📡 Cobertura: {cob:.1f}% ({fat:,}/{lin:,})"
