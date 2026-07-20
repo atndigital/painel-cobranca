@@ -52,19 +52,30 @@ def _to_records(df):
     """Converte DataFrame para lista de dicts limpos (sem NaN)."""
     return [{k: _cv(v) for k, v in row.items()} for row in df.to_dict('records')]
 
-def _insert_lotes(sb, tabela, records, lote=500):
+def _insert_lotes(sb, tabela, records, lote=500, on_conflict=None):
+    """Insere (ou upsert, se on_conflict for passado) em lotes.
+
+    on_conflict: string com a(s) coluna(s) da constraint UNIQUE, ex.
+    'SAFRA,NUMERO PORTADO,FATURA'. Quando fornecida, usa upsert —
+    registros que já existem são atualizados em vez de gerar erro
+    de chave duplicada (23505).
+    """
     import streamlit as st
     total, erros = 0, []
     for i in range(0, len(records), lote):
+        bloco = records[i:i+lote]
         try:
-            res = sb.table(tabela).insert(records[i:i+lote]).execute()
-            total += len(res.data) if res.data else len(records[i:i+lote])
+            if on_conflict:
+                res = sb.table(tabela).upsert(bloco, on_conflict=on_conflict).execute()
+            else:
+                res = sb.table(tabela).insert(bloco).execute()
+            total += len(res.data) if res.data else len(bloco)
         except Exception as e:
             erros.append(f"lote {i}: {e}")
             print(f"[Supabase] insert {tabela} lote {i}: {e}")
     if erros:
         st.warning(f"⚠️ {tabela}: {len(erros)} lote(s) falharam ao inserir — {erros[0]}")
-    print(f"[Supabase] ✓ {tabela}: {total} inseridos")
+    print(f"[Supabase] ✓ {tabela}: {total} inseridos/atualizados")
     return total
 
 def _normalizar_ctrl(df):
@@ -152,21 +163,39 @@ def carregar_historico() -> pd.DataFrame:
     return _safe_read(HIST_FILE)
 
 def salvar_historico(df: pd.DataFrame):
+    """Salva histórico de pagamentos via UPSERT (atualiza se já existe,
+    insere se for novo — chave: SAFRA + NUMERO PORTADO + FATURA).
+
+    Diferente de salvar_controle(), aqui NÃO apagamos a tabela antes:
+    upsert já resolve tanto o registro novo quanto o existente, sem
+    risco de perder dados caso o insert falhe no meio do caminho.
+    """
     import json
     import streamlit as st
     _safe_write(df, HIST_FILE)
     sb = _get_sb()
     if not sb: return
     try:
+        # dedupe defensivo: mesma combinação não pode aparecer 2x no MESMO
+        # payload, senão o upsert também falha (ON CONFLICT não trata
+        # duplicata dentro do próprio lote)
+        chave = ['SAFRA', 'NUMERO PORTADO', 'FATURA']
+        chave_presente = [c for c in chave if c in df.columns]
+        if len(chave_presente) == len(chave) and len(df):
+            antes = len(df)
+            df = df.drop_duplicates(subset=chave, keep='last')
+            if len(df) < antes:
+                print(f"[Supabase] historico_pagamentos: {antes - len(df)} duplicata(s) removida(s) antes do upsert")
+
         records = _to_records(df) if len(df) else []
         if records:
-            json.dumps(records[0])  # valida antes de deletar
-        sb.table('historico_pagamentos').delete().gt('id', 0).execute()
+            json.dumps(records[0])  # valida antes de enviar
         if not records:
             return
-        inseridos = _insert_lotes(sb, 'historico_pagamentos', records)
-        if inseridos < len(records):
-            st.error(f"❌ historico_pagamentos: apenas {inseridos}/{len(records)} "
+        atualizados = _insert_lotes(sb, 'historico_pagamentos', records,
+                                     on_conflict='SAFRA,NUMERO PORTADO,FATURA')
+        if atualizados < len(records):
+            st.error(f"❌ historico_pagamentos: apenas {atualizados}/{len(records)} "
                      f"linhas salvas no Supabase.")
     except Exception as e:
         st.error(f"❌ Falha ao salvar historico_pagamentos no Supabase: {e}")
